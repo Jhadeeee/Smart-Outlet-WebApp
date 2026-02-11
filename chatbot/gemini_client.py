@@ -9,7 +9,7 @@ class GeminiClient:
             raise ValueError("Gemini API key not configured. Please set GEMINI_API_KEY in your .env file.")
         
         genai.configure(api_key=api_key)
-        self.model = genai.GenerativeModel('gemini-2.0-flash')
+        self.model = genai.GenerativeModel('gemini-2.0-flash-lite')
         self.system_prompt = self._load_system_prompt()
     
     def _load_system_prompt(self):
@@ -38,4 +38,9 @@ Please respond helpfully based on the instructions above."""
             response = self.model.generate_content(prompt)
             return response.text
         except Exception as e:
-            return f"Sorry, I encountered an error: {str(e)}"
+            error_msg = str(e)
+            if '429' in error_msg:
+                return ("⏳ **Rate limit reached!** The free tier allows a limited number of requests per minute.\n\n"
+                        "Please wait **~60 seconds** and try again. This is a Google API limit, not a bug.\n\n"
+                        "💡 *Tip: The free tier allows ~15 requests/minute and ~1,500 requests/day.*")
+            return f"Sorry, I encountered an error: {error_msg}"
