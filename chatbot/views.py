@@ -24,20 +24,23 @@ def send_message(request):
                 'message': 'No message provided'
             }, status=400)
         
-        # Get user's outlets for context
-        outlets = request.user.outlets.all()
-        
         # Initialize Gemini client and get response
         gemini = GeminiClient()
-        ai_response = gemini.get_response(user_message, outlets)
+        ai_response = gemini.get_response(user_message, user=request.user)
         
         return JsonResponse({
             'success': True,
             'response': ai_response
         })
         
-    except Exception as e:
+    except ValueError as e:
+        # API key not configured
         return JsonResponse({
             'success': False,
             'message': str(e)
+        }, status=500)
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': f'An error occurred: {str(e)}'
         }, status=500)
