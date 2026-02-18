@@ -4,7 +4,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.contrib import messages
 from django.http import JsonResponse
-from .models import Outlet, SensorData, UserProfile
+from .models import Outlet, SensorData, UserProfile, EventLogTest
 
 # ============ AUTHENTICATION VIEWS ============
 
@@ -91,6 +91,44 @@ def home_view(request):
         'user': request.user,
     }
     return render(request, 'home.html', context)
+
+
+@login_required
+def data_logs_view(request):
+    """Data Logs page — shows EventLogTest entries in a filterable table"""
+    user_outlets = Outlet.objects.filter(user=request.user)
+    
+    # Start with all logs for user's outlets
+    logs = EventLogTest.objects.filter(outlet__in=user_outlets)
+    
+    # Apply filters from query params
+    device_filter = request.GET.get('device', '')
+    if device_filter:
+        logs = logs.filter(outlet__device_id=device_filter)
+    
+    event_filter = request.GET.get('event_type', '')
+    if event_filter:
+        logs = logs.filter(event_type=event_filter)
+    
+    severity_filter = request.GET.get('severity', '')
+    if severity_filter:
+        logs = logs.filter(severity=severity_filter)
+    
+    # Limit to latest 100
+    logs = logs.select_related('outlet')[:100]
+    
+    context = {
+        'logs': logs,
+        'outlets': user_outlets,
+        'event_types': EventLogTest.EVENT_TYPES,
+        'severity_levels': EventLogTest.SEVERITY_LEVELS,
+        'active_filters': {
+            'device': device_filter,
+            'event_type': event_filter,
+            'severity': severity_filter,
+        },
+    }
+    return render(request, 'data_logs.html', context)
 
 
 # ============ DASHBOARD (for later) ============

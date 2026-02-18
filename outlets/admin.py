@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Outlet, SensorData, OutletSchedule, Alert, UserProfile
+from .models import Outlet, SensorData, OutletSchedule, Alert, UserProfile, EventLogTest
 
 @admin.register(UserProfile)
 class UserProfileAdmin(admin.ModelAdmin):
@@ -34,3 +34,11 @@ class AlertAdmin(admin.ModelAdmin):
     list_filter = ['alert_type', 'is_read', 'created_at']
     search_fields = ['outlet__name', 'message']
     readonly_fields = ['created_at']
+
+@admin.register(EventLogTest)
+class EventLogTestAdmin(admin.ModelAdmin):
+    list_display = ['outlet', 'event_type', 'severity', 'socket_label', 'current_reading', 'timestamp']
+    list_filter = ['event_type', 'severity', 'outlet', 'timestamp']
+    search_fields = ['outlet__name', 'message']
+    readonly_fields = ['timestamp']
+    date_hierarchy = 'timestamp'

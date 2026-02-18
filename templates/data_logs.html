@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Data Logs - Smart Outlet</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary-purple: #667eea;
+            --secondary-purple: #764ba2;
+            --accent-blue: #2196F3;
+            --danger-red: #ef4444;
+            --warning-yellow: #f59e0b;
+            --success-green: #22c55e;
+            --inactive-gray: #94a3b8;
+            --glass-bg: rgba(255, 255, 255, 0.08);
+            --glass-border: rgba(255, 255, 255, 0.12);
+        }
+        * { font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; box-sizing: border-box; }
+        body { background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%); min-height: 100vh; position: relative; overflow-x: hidden; }
+        body::before, body::after { content: ''; position: fixed; border-radius: 50%; filter: blur(80px); opacity: 0.15; pointer-events: none; z-index: 0; }
+        body::before { width: 500px; height: 500px; background: var(--primary-purple); top: -100px; right: -100px; animation: float1 15s ease-in-out infinite; }
+        body::after { width: 400px; height: 400px; background: var(--secondary-purple); bottom: -50px; left: -100px; animation: float2 18s ease-in-out infinite; }
+        @keyframes float1 { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(-60px, 60px); } }
+        @keyframes float2 { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(40px, -50px); } }
+        @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        .navbar { background: rgba(255, 255, 255, 0.07); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border-bottom: 1px solid var(--glass-border); padding: 14px 24px; position: sticky; top: 0; z-index: 100; }
+        .navbar .container-fluid { display: flex; justify-content: space-between; align-items: center; }
+        .navbar-brand { font-weight: 700; color: white !important; font-size: 18px; letter-spacing: -0.3px; text-decoration: none; }
+        .navbar-brand i { color: var(--warning-yellow); }
+        .navbar-icons { display: flex; gap: 8px; align-items: center; }
+        .navbar-icons>a, .profile-btn { color: rgba(255, 255, 255, 0.7); font-size: 18px; transition: all 0.3s; width: 38px; height: 38px; display: flex; align-items: center; justify-content: center; border-radius: 10px; background: none; border: none; cursor: pointer; }
+        .navbar-icons>a:hover, .profile-btn:hover { color: white; background: rgba(255, 255, 255, 0.1); }
+        .profile-wrapper { position: relative; }
+        .profile-dropdown { position: absolute; top: calc(100% + 10px); right: 0; background: rgba(30, 30, 50, 0.95); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid var(--glass-border); border-radius: 16px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4); min-width: 260px; opacity: 0; visibility: hidden; transform: translateY(-8px) scale(0.97); transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1); z-index: 1000; overflow: hidden; }
+        .profile-dropdown.show { opacity: 1; visibility: visible; transform: translateY(0) scale(1); }
+        .profile-header { background: linear-gradient(135deg, var(--primary-purple) 0%, var(--secondary-purple) 100%); color: white; padding: 22px 20px; text-align: center; }
+        .profile-avatar { width: 56px; height: 56px; background: rgba(255, 255, 255, 0.2); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 10px; font-size: 24px; border: 2px solid rgba(255, 255, 255, 0.3); }
+        .profile-name { font-weight: 600; font-size: 15px; margin: 0; }
+        .profile-email { font-size: 12px; opacity: 0.8; margin: 4px 0 0; }
+        .profile-menu { padding: 8px 0; }
+        .profile-menu-item { display: flex; align-items: center; gap: 12px; padding: 12px 20px; color: rgba(255, 255, 255, 0.7); text-decoration: none; transition: all 0.2s; font-size: 14px; }
+        .profile-menu-item:hover { background: rgba(255, 255, 255, 0.08); color: white; }
+        .profile-menu-item i { width: 20px; text-align: center; font-size: 14px; opacity: 0.6; }
+        .profile-menu-item:hover i { opacity: 1; }
+        .profile-menu-item.active { background: rgba(102, 126, 234, 0.15); color: var(--primary-purple); }
+        .profile-menu-item.active i { opacity: 1; color: var(--primary-purple); }
+        .profile-menu-item.logout { border-top: 1px solid rgba(255, 255, 255, 0.08); color: #f87171; }
+        .profile-menu-item.logout i { color: #f87171; opacity: 0.8; }
+        .profile-menu-item.logout:hover { background: rgba(239, 68, 68, 0.1); color: #fca5a5; }
+        .main-container { position: relative; z-index: 1; padding: 24px 16px 40px; }
+        .page-title { color: white; font-weight: 700; font-size: 24px; margin-bottom: 4px; animation: fadeInUp 0.4s ease-out; }
+        .page-subtitle { color: rgba(255, 255, 255, 0.5); font-size: 14px; margin-bottom: 20px; animation: fadeInUp 0.4s ease-out 0.05s backwards; }
+        .filter-bar { background: rgba(255, 255, 255, 0.07); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid var(--glass-border); border-radius: 14px; padding: 16px 20px; margin-bottom: 16px; display: flex; gap: 12px; flex-wrap: wrap; align-items: center; animation: fadeInUp 0.4s ease-out 0.1s backwards; }
+        .filter-bar label { color: rgba(255, 255, 255, 0.6); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-right: -4px; }
+        .filter-bar select { background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.15); color: white; border-radius: 8px; padding: 8px 12px; font-size: 13px; font-family: 'Inter', sans-serif; cursor: pointer; transition: all 0.2s; min-width: 130px; }
+        .filter-bar select:focus { outline: none; border-color: var(--primary-purple); box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.3); }
+        .filter-bar select option { background: #1e1e32; color: white; }
+        .btn-filter { background: linear-gradient(135deg, var(--primary-purple), var(--secondary-purple)); color: white; border: none; border-radius: 8px; padding: 8px 20px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.25s; }
+        .btn-filter:hover { transform: translateY(-1px); box-shadow: 0 4px 15px rgba(102, 126, 234, 0.35); }
+        .btn-clear { background: rgba(255, 255, 255, 0.08); color: rgba(255, 255, 255, 0.6); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; padding: 8px 16px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s; text-decoration: none; }
+        .btn-clear:hover { color: white; background: rgba(255, 255, 255, 0.12); }
+        .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 16px; animation: fadeInUp 0.4s ease-out 0.15s backwards; }
+        .stat-card { background: rgba(255, 255, 255, 0.07); backdrop-filter: blur(16px); border: 1px solid var(--glass-border); border-radius: 12px; padding: 16px 18px; text-align: center; }
+        .stat-value { font-size: 28px; font-weight: 800; color: white; line-height: 1; }
+        .stat-label { font-size: 11px; color: rgba(255, 255, 255, 0.5); text-transform: uppercase; letter-spacing: 1px; margin-top: 6px; font-weight: 600; }
+        .stat-card.critical .stat-value { color: var(--danger-red); }
+        .stat-card.warning .stat-value { color: var(--warning-yellow); }
+        .stat-card.info .stat-value { color: var(--accent-blue); }
+        .table-container { background: rgba(255, 255, 255, 0.07); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid var(--glass-border); border-radius: 16px; overflow: hidden; animation: fadeInUp 0.4s ease-out 0.2s backwards; }
+        .table-header { padding: 16px 20px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); display: flex; justify-content: space-between; align-items: center; }
+        .table-header h3 { color: white; font-size: 16px; font-weight: 600; margin: 0; }
+        .table-count { color: rgba(255, 255, 255, 0.4); font-size: 13px; }
+        .data-table { width: 100%; border-collapse: collapse; }
+        .data-table thead th { color: rgba(255, 255, 255, 0.5); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; padding: 12px 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); text-align: left; white-space: nowrap; }
+        .data-table tbody tr { transition: background 0.15s; }
+        .data-table tbody tr:hover { background: rgba(255, 255, 255, 0.04); }
+        .data-table tbody td { padding: 14px 16px; color: rgba(255, 255, 255, 0.8); font-size: 13px; border-bottom: 1px solid rgba(255, 255, 255, 0.04); vertical-align: middle; }
+        .data-table tbody tr:last-child td { border-bottom: none; }
+        .badge-event { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+        .badge-event.overload { background: rgba(239, 68, 68, 0.15); color: #f87171; }
+        .badge-event.cutoff { background: rgba(239, 68, 68, 0.15); color: #fca5a5; }
+        .badge-event.power_on { background: rgba(34, 197, 94, 0.15); color: #4ade80; }
+        .badge-event.power_off { background: rgba(148, 163, 184, 0.15); color: #94a3b8; }
+        .badge-event.warning { background: rgba(245, 158, 11, 0.15); color: #fbbf24; }
+        .badge-event.reconnect { background: rgba(34, 197, 94, 0.15); color: #4ade80; }
+        .badge-event.disconnect { background: rgba(148, 163, 184, 0.15); color: #94a3b8; }
+        .badge-severity { display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border-radius: 50px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+        .badge-severity::before { content: ''; width: 6px; height: 6px; border-radius: 50%; }
+        .badge-severity.critical { background: rgba(239, 68, 68, 0.12); color: #f87171; }
+        .badge-severity.critical::before { background: #ef4444; }
+        .badge-severity.warning-sev { background: rgba(245, 158, 11, 0.12); color: #fbbf24; }
+        .badge-severity.warning-sev::before { background: #f59e0b; }
+        .badge-severity.info-sev { background: rgba(96, 165, 250, 0.12); color: #60a5fa; }
+        .badge-severity.info-sev::before { background: #3b82f6; }
+        .device-chip { background: rgba(102, 126, 234, 0.12); color: var(--primary-purple); padding: 3px 8px; border-radius: 6px; font-size: 12px; font-weight: 600; font-family: 'SF Mono', 'Fira Code', monospace; }
+        .timestamp { color: rgba(255, 255, 255, 0.4); font-size: 12px; white-space: nowrap; }
+        .timestamp .date { display: block; font-weight: 500; color: rgba(255, 255, 255, 0.6); }
+        .timestamp .time { display: block; }
+        .current-val { font-weight: 600; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 13px; color: var(--success-green); }
+        .log-message { color: rgba(255, 255, 255, 0.5); font-size: 12px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .empty-state { text-align: center; padding: 60px 20px; color: rgba(255, 255, 255, 0.4); }
+        .empty-state i { font-size: 48px; margin-bottom: 16px; opacity: 0.3; }
+        .empty-state h4 { font-size: 16px; margin-bottom: 8px; color: rgba(255, 255, 255, 0.6); }
+        .empty-state p { font-size: 13px; }
+        .table-scroll { overflow-x: auto; }
+        @media (max-width: 768px) {
+            .navbar-brand { font-size: 16px; }
+            .page-title { font-size: 20px; }
+            .filter-bar { padding: 12px 14px; gap: 8px; }
+            .filter-bar select { min-width: 100px; font-size: 12px; }
+            .stats-row { grid-template-columns: repeat(2, 1fr); }
+            .stat-value { font-size: 22px; }
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="{% url 'outlets:home' %}"><i class="fas fa-bolt me-2"></i>Data Logs</a>
+            <div class="navbar-icons">
+                <a href="#" title="Notifications"><i class="fas fa-bell"></i></a>
+                <div class="profile-wrapper">
+                    <button class="profile-btn" id="profileBtn" title="Profile"><i class="fas fa-user"></i></button>
+                    <div class="profile-dropdown" id="profileDropdown">
+                        <div class="profile-header">
+                            <div class="profile-avatar"><i class="fas fa-user"></i></div>
+                            <p class="profile-name">{{ user.first_name|default:user.username }} {{ user.last_name }}</p>
+                            <p class="profile-email">{{ user.email|default:"No email set" }}</p>
+                        </div>
+                        <div class="profile-menu">
+                            <a href="{% url 'outlets:dashboard' %}" class="profile-menu-item"><i class="fas fa-chart-line"></i><span>Dashboard</span></a>
+                            <a href="{% url 'outlets:data_logs' %}" class="profile-menu-item active"><i class="fas fa-clipboard-list"></i><span>Data Logs</span></a>
+                            <a href="/admin/" class="profile-menu-item"><i class="fas fa-cog"></i><span>Settings</span></a>
+                            <a href="{% url 'outlets:logout' %}" class="profile-menu-item logout"><i class="fas fa-sign-out-alt"></i><span>Logout</span></a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+    <div class="main-container">
+        <div class="container">
+            <div class="row justify-content-center">
+                <div class="col-12 col-lg-11 col-xl-10">
+                    <h1 class="page-title"><i class="fas fa-clipboard-list me-2"></i>Data Logs</h1>
+                    <p class="page-subtitle">Event history from your smart outlets</p>
+                    <div class="stats-row">
+                        <div class="stat-card"><div class="stat-value">{{ logs|length }}</div><div class="stat-label">Total Events</div></div>
+                        <div class="stat-card critical"><div class="stat-value" id="criticalCount">0</div><div class="stat-label">Critical</div></div>
+                        <div class="stat-card warning"><div class="stat-value" id="warningCount">0</div><div class="stat-label">Warnings</div></div>
+                        <div class="stat-card info"><div class="stat-value" id="infoCount">0</div><div class="stat-label">Info</div></div>
+                    </div>
+                    <form class="filter-bar" method="GET" action="{% url 'outlets:data_logs' %}">
+                        <label><i class="fas fa-filter me-1"></i>Filters</label>
+                        <select name="device">
+                            <option value="">All Devices</option>
+                            {% for outlet in outlets %}
+                            <option value="{{ outlet.device_id }}">{{ outlet.device_id }}</option>
+                            {% endfor %}
+                        </select>
+                        <select name="event_type">
+                            <option value="">All Events</option>
+                            {% for val, lbl in event_types %}
+                            <option value="{{ val }}">{{ lbl }}</option>
+                            {% endfor %}
+                        </select>
+                        <select name="severity">
+                            <option value="">All Severity</option>
+                            {% for val, lbl in severity_levels %}
+                            <option value="{{ val }}">{{ lbl }}</option>
+                            {% endfor %}
+                        </select>
+                        <button type="submit" class="btn-filter"><i class="fas fa-search me-1"></i>Apply</button>
+                        <a href="{% url 'outlets:data_logs' %}" class="btn-clear">Clear</a>
+                    </form>
+                    <div class="table-container">
+                        <div class="table-header">
+                            <h3><i class="fas fa-list me-2" style="opacity: 0.5;"></i>Event Log</h3>
+                            <span class="table-count">{{ logs|length }} entries</span>
+                        </div>
+                        {% if logs %}
+                        <div class="table-scroll">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Timestamp</th>
+                                        <th>Device</th>
+                                        <th>Event</th>
+                                        <th>Severity</th>
+                                        <th>Socket</th>
+                                        <th>Current</th>
+                                        <th>Message</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for log in logs %}
+                                    <tr>
+                                        <td><div class="timestamp"><span class="date">{{ log.timestamp|date:"M d, Y" }}</span><span class="time">{{ log.timestamp|time:"h:i:s A" }}</span></div></td>
+                                        <td><span class="device-chip">{{ log.outlet.device_id }}</span></td>
+                                        <td><span class="badge-event {{ log.event_type }}">{% if log.event_type == 'overload' %}<i class="fas fa-bolt"></i>{% elif log.event_type == 'cutoff' %}<i class="fas fa-power-off"></i>{% elif log.event_type == 'power_on' %}<i class="fas fa-toggle-on"></i>{% elif log.event_type == 'power_off' %}<i class="fas fa-toggle-off"></i>{% elif log.event_type == 'warning' %}<i class="fas fa-exclamation-triangle"></i>{% elif log.event_type == 'reconnect' %}<i class="fas fa-wifi"></i>{% elif log.event_type == 'disconnect' %}<i class="fas fa-plug-circle-xmark"></i>{% endif %} {{ log.get_event_type_display }}</span></td>
+                                        <td>{% if log.severity == 'critical' %}<span class="badge-severity critical">CRITICAL</span>{% elif log.severity == 'warning' %}<span class="badge-severity warning-sev">WARNING</span>{% else %}<span class="badge-severity info-sev">INFO</span>{% endif %}</td>
+                                        <td>{% if log.socket_label %}<span style="color: rgba(255,255,255,0.6); font-weight: 500;">{{ log.socket_label }}</span>{% else %}<span style="color: rgba(255,255,255,0.2);">-</span>{% endif %}</td>
+                                        <td>{% if log.current_reading %}<span class="current-val">{{ log.current_reading|floatformat:0 }} mA</span>{% else %}<span style="color: rgba(255,255,255,0.2);">-</span>{% endif %}</td>
+                                        <td><div class="log-message">{{ log.message }}</div></td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
+                        <div class="empty-state">
+                            <i class="fas fa-inbox"></i>
+                            <h4>No events found</h4>
+                            <p>Event logs will appear here when your ESP32 sends data</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        var profileBtn = document.getElementById('profileBtn');
+        var profileDropdown = document.getElementById('profileDropdown');
+        profileBtn.addEventListener('click', function(e) { e.stopPropagation(); profileDropdown.classList.toggle('show'); });
+        document.addEventListener('click', function(e) { if (!profileDropdown.contains(e.target) && !profileBtn.contains(e.target)) profileDropdown.classList.remove('show'); });
+        document.addEventListener('keydown', function(e) { if (e.key === 'Escape') profileDropdown.classList.remove('show'); });
+        var rows = document.querySelectorAll('.data-table tbody tr');
+        var critical = 0, warn = 0, info = 0;
+        rows.forEach(function(row) { var b = row.querySelector('.badge-severity'); if (b) { if (b.classList.contains('critical')) critical++; else if (b.classList.contains('warning-sev')) warn++; else info++; } });
+        document.getElementById('criticalCount').textContent = critical;
+        document.getElementById('warningCount').textContent = warn;
+        document.getElementById('infoCount').textContent = info;
+    </script>
+</body>
+</html>

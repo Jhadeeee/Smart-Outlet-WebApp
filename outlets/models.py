@@ -106,3 +106,43 @@ class Alert(models.Model):
     
     def __str__(self):
         return f"{self.get_alert_type_display()} - {self.outlet.name}"
+
+
+class EventLogTest(models.Model):
+    """Experimental event logs from ESP32 (cutoff, overload, power on/off).
+    
+    Only important events are logged here to save database space.
+    Regular sensor readings go through WebSocket only (no DB write).
+    """
+    EVENT_TYPES = [
+        ('cutoff', 'Cut Off'),
+        ('overload', 'Overload'),
+        ('power_on', 'Power On'),
+        ('power_off', 'Power Off'),
+        ('warning', 'Warning'),
+        ('reconnect', 'Reconnected'),
+        ('disconnect', 'Disconnected'),
+    ]
+    SEVERITY_LEVELS = [
+        ('info', 'Info'),
+        ('warning', 'Warning'),
+        ('critical', 'Critical'),
+    ]
+
+    outlet = models.ForeignKey(Outlet, on_delete=models.CASCADE, related_name='event_logs_test')
+    event_type = models.CharField(max_length=20, choices=EVENT_TYPES)
+    severity = models.CharField(max_length=10, choices=SEVERITY_LEVELS, default='info')
+    message = models.TextField(blank=True)
+    socket_label = models.CharField(max_length=2, blank=True, help_text="A, B, or AB")
+    current_reading = models.FloatField(null=True, blank=True, help_text="Current in mA at time of event")
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['-timestamp']),
+            models.Index(fields=['outlet', '-timestamp']),
+        ]
+
+    def __str__(self):
+        return f"{self.get_event_type_display()} - {self.outlet.name} ({self.timestamp.strftime('%Y-%m-%d %H:%M:%S')})"

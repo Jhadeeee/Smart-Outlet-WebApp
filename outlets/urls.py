@@ -12,6 +12,9 @@ urlpatterns = [
     # Home page
     path('', views.home_view, name='home'),
     
+    # Data Logs
+    path('data-logs/', views.data_logs_view, name='data_logs'),
+    
     # Dashboard (for later use)
     path('dashboard/', views.dashboard, name='dashboard'),
     path('outlet/<str:device_id>/', views.outlet_detail, name='outlet_detail'),
