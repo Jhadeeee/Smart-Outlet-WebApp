@@ -49,6 +49,8 @@
 
 // ─── Cloud / Server ─────────────────────────────────────────
 #define CLOUD_SEND_INTERVAL_MS  10000     // How often to send data to server
+#define SENSOR_POLL_INTERVAL_MS 10000     // How often to poll sensors from outlets
 #define HTTP_TIMEOUT_MS         5000      // HTTP request timeout
+#define DEVICE_ID_PREFIX        "SO-"     // Prefix for Django device IDs (e.g., "SO-01")
 
 #endif // CONFIG_H

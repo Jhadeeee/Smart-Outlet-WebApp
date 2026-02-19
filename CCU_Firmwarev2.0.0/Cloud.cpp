@@ -2,6 +2,7 @@
  * Cloud.cpp
  * ----------
  * Implementation of HTTP server communication.
+ * Sends sensor readings and event logs to Django API.
  */
 
 #include "Cloud.h"
@@ -22,7 +23,50 @@ void Cloud::begin(const String& serverUrl) {
     Serial.println("[Cloud] Initialized with server: " + _serverUrl);
 }
 
-int Cloud::sendData(const String& jsonPayload) {
+// ─── Send Sensor Data ───────────────────────────────────────
+int Cloud::sendSensorData(const String& deviceId, float currentMA) {
+    // Convert mA to Amps for the API
+    float currentA = currentMA / 1000.0;
+
+    // Build JSON matching Django's expected format:
+    // { device_id, voltage, current, power, energy, temperature }
+    String json = "{";
+    json += "\"device_id\":\"" + deviceId + "\",";
+    json += "\"voltage\":0,";                          // PIC doesn't measure voltage
+    json += "\"current\":" + String(currentA, 3) + ",";
+    json += "\"power\":0,";                            // Can't calculate without voltage
+    json += "\"energy\":0";
+    json += "}";
+
+    return sendData("/api/sensor-data/", json);
+}
+
+// ─── Send Event Log ─────────────────────────────────────────
+int Cloud::sendEventLog(const String& deviceId, const String& eventType,
+                        const String& severity, const String& message,
+                        const String& socketLabel, float currentMA) {
+    // Build JSON matching Django's expected format:
+    // { device_id, event_type, severity, message, socket_label, current_reading }
+    String json = "{";
+    json += "\"device_id\":\"" + deviceId + "\",";
+    json += "\"event_type\":\"" + eventType + "\",";
+    json += "\"severity\":\"" + severity + "\",";
+    json += "\"message\":\"" + message + "\"";
+
+    if (socketLabel.length() > 0) {
+        json += ",\"socket_label\":\"" + socketLabel + "\"";
+    }
+    if (currentMA > 0) {
+        json += ",\"current_reading\":" + String(currentMA, 1);
+    }
+
+    json += "}";
+
+    return sendData("/api/event-log/", json);
+}
+
+// ─── Generic POST ───────────────────────────────────────────
+int Cloud::sendData(const String& endpoint, const String& jsonPayload) {
     if (_serverUrl.length() == 0) {
         return -1;
     }
@@ -32,9 +76,9 @@ int Cloud::sendData(const String& jsonPayload) {
     }
 
     HTTPClient http;
-    String endpoint = _serverUrl + "/api/data";  // Customize this endpoint
+    String url = _serverUrl + endpoint;
 
-    http.begin(endpoint);
+    http.begin(url);
     http.addHeader("Content-Type", "application/json");
     http.setTimeout(HTTP_TIMEOUT_MS);
 
@@ -50,6 +94,7 @@ int Cloud::sendData(const String& jsonPayload) {
     return _lastResponseCode;
 }
 
+// ─── Server Reachability ────────────────────────────────────
 bool Cloud::isReachable() {
     if (_serverUrl.length() == 0 || WiFi.status() != WL_CONNECTED) {
         return false;

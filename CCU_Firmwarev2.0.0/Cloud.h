@@ -1,7 +1,9 @@
 /*
  * Cloud.h
  * --------
- * Handles HTTP communication with the remote server.
+ * Handles HTTP communication with the Django server.
+ * Provides methods for sending sensor data and event logs
+ * to the appropriate API endpoints.
  */
 
 #ifndef CLOUD_H
@@ -19,9 +21,24 @@ public:
     // Initialize with server URL
     void begin(const String& serverUrl);
 
-    // Send JSON data to server via POST
-    int sendData(const String& jsonPayload);
+    // ─── Sensor Data ────────────────────────
+    // Send current reading to /api/sensor-data/
+    // Returns HTTP response code (200 = success)
+    int sendSensorData(const String& deviceId, float currentMA);
 
+    // ─── Event Logging ──────────────────────
+    // Send event log to /api/event-log/
+    // eventType: "overload", "cutoff", "power_on", "power_off", "warning"
+    // severity: "info", "warning", "critical"
+    int sendEventLog(const String& deviceId, const String& eventType,
+                     const String& severity, const String& message,
+                     const String& socketLabel = "", float currentMA = 0);
+
+    // ─── Generic POST ───────────────────────
+    // Send raw JSON to a specific endpoint
+    int sendData(const String& endpoint, const String& jsonPayload);
+
+    // ─── Server Status ──────────────────────
     // Check if server is reachable (GET request)
     bool isReachable();
 

@@ -11,9 +11,17 @@ OutletManager::OutletManager()
       _senderID(CCU_SENDER_ID),
       _deviceCount(0),
       _activeIndex(0),
-      _rxIndex(0) {
-    // Initialize first device with default ID 0x01
-    _addDevice(0x01);
+      _rxIndex(0),
+      _lastPolledDeviceId(0x00),
+      _relay1Current(0),
+      _relay2Current(0),
+      _gotRelay1(false),
+      _gotRelay2(false),
+      _lastTotalCurrent(0),
+      _newReading(false),
+      _overloadDetected(false),
+      _pollIndex(0) {
+    // No default device — register explicitly in setup()
 }
 
 // ─── Initialize HC-12 ──────────────────────────────────────
@@ -131,7 +139,56 @@ void OutletManager::ping() {
     sendCommand(CMD_PING, 0x00, 0x00);
 }
 
-// ─── Device Management ─────────────────────────────────────
+// ─── Register Device ─────────────────────────────────────
+void OutletManager::registerDevice(uint8_t deviceId) {
+    int idx = _findDevice(deviceId);
+    if (idx >= 0) return;  // Already registered
+
+    idx = _addDevice(deviceId);
+    if (idx < 0) {
+        Serial.println("[OutletManager] Error: Max outlets reached!");
+        return;
+    }
+
+    // Set the first registered device as active
+    if (_deviceCount == 1) {
+        _activeIndex = 0;
+    }
+
+    Serial.print("[OutletManager] Registered device 0x");
+    if (deviceId < 0x10) Serial.print("0");
+    Serial.println(deviceId, HEX);
+}
+
+// ─── Poll Next Device (Round-Robin) ───────────────────
+void OutletManager::pollNextDevice() {
+    if (_deviceCount == 0) return;
+
+    // Get the device at the current poll index
+    uint8_t targetId = _devices[_pollIndex].getDeviceId();
+
+    // Store which device we're polling (for Django ID mapping)
+    _lastPolledDeviceId = targetId;
+    _gotRelay1 = false;
+    _gotRelay2 = false;
+
+    // Build and send CMD_READ_CURRENT to this device
+    RFPacket pkt = RFProtocol::build(targetId, _senderID, CMD_READ_CURRENT, 0x00, 0x00);
+    uint8_t buf[RF_PACKET_SIZE];
+    RFProtocol::toBuffer(pkt, buf);
+    for (int i = 0; i < RF_PACKET_SIZE; i++) {
+        _hc12.write(buf[i]);
+    }
+
+    Serial.print("[Poll] Read Sensors -> 0x");
+    if (targetId < 0x10) Serial.print("0");
+    Serial.println(targetId, HEX);
+
+    // Advance to next device
+    _pollIndex = (_pollIndex + 1) % _deviceCount;
+}
+
+// ─── Device Management ───────────────────────────────────
 void OutletManager::selectDevice(uint8_t deviceId) {
     int idx = _findDevice(deviceId);
     if (idx < 0) {
@@ -154,6 +211,21 @@ OutletDevice& OutletManager::getActiveDevice() {
 
 uint8_t OutletManager::getActiveDeviceId() const {
     return _devices[_activeIndex].getDeviceId();
+}
+
+// ─── Sensor Data Access ─────────────────────────────────────
+float OutletManager::getLastCurrentMA() const    { return _lastTotalCurrent; }
+float OutletManager::getRelay1CurrentMA() const  { return _relay1Current; }
+float OutletManager::getRelay2CurrentMA() const  { return _relay2Current; }
+bool  OutletManager::hasNewReading() const        { return _newReading; }
+void  OutletManager::clearNewReading()            { _newReading = false; }
+bool  OutletManager::isOverloadDetected() const   { return _overloadDetected; }
+void  OutletManager::clearOverload()              { _overloadDetected = false; }
+
+String OutletManager::getLastPolledHexId() const {
+    char buf[5];
+    sprintf(buf, "%02X", _lastPolledDeviceId);
+    return String(buf);
 }
 
 // ─── AT Command Passthrough ─────────────────────────────────
@@ -259,13 +331,39 @@ void OutletManager::_parsePacket(const uint8_t* frame) {
         // Overload trip detection (Feature #9)
         if (val16 == 0xFFFF) {
             Serial.println("  >>> OVERLOAD TRIP! <<<");
+            _overloadDetected = true;
         } else {
             // Current reading (Feature #8)
-            Serial.print("  Current: ");
+            float currentMA = (float)val16;
+
+            Serial.print("  Relay ");
+            Serial.print(sender);  // 0x01 = R1, 0x02 = R2
+            Serial.print(" Current: ");
             Serial.print(val16);
             Serial.print(" mA (");
             Serial.print(val16 / 1000.0, 2);
             Serial.println(" A)");
+
+            // Accumulate per-relay readings
+            if (sender == 0x01) {
+                _relay1Current = currentMA;
+                _gotRelay1 = true;
+            } else if (sender == 0x02) {
+                _relay2Current = currentMA;
+                _gotRelay2 = true;
+            }
+
+            // When both relays received, flag complete reading
+            if (_gotRelay1 && _gotRelay2) {
+                _lastTotalCurrent = _relay1Current + _relay2Current;
+                _newReading = true;
+
+                Serial.print("  >> Total: ");
+                Serial.print(_lastTotalCurrent, 0);
+                Serial.print(" mA (");
+                Serial.print(_lastTotalCurrent / 1000.0, 2);
+                Serial.println(" A)");
+            }
         }
     }
     else {

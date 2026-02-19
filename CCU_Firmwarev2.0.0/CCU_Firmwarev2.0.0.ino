@@ -68,8 +68,8 @@ enum class DeviceMode {
 DeviceMode currentMode = DeviceMode::SETUP;
 
 // ─── Timing ─────────────────────────────────────────────────
-unsigned long lastCloudSend = 0;
-unsigned int  cloudFailCount = 0;    // Tracks consecutive failures to suppress spam
+unsigned long lastSensorPoll = 0;       // Timer for sensor polling
+unsigned int  cloudFailCount = 0;       // Tracks consecutive failures to suppress spam
 
 // ─── Factory Reset Check ────────────────────────────────────
 void checkFactoryReset() {
@@ -129,6 +129,11 @@ void enterRunningMode() {
 
     // Initialize HC-12 outlet communication
     outletManager.begin();
+
+    // Register known smart outlets
+    outletManager.registerDevice(0xFE);  // Smart Outlet 1
+    outletManager.registerDevice(0xFD);  // Smart Outlet 2
+
     serialCLI.begin();
 
     Serial.println("\n✓ HC-12 RF + Serial CLI ready.");
@@ -199,7 +204,46 @@ void loop() {
             // Serial CLI: handle debug commands from serial monitor
             serialCLI.update();
 
-            // Check WiFi is still connected
+            // ── Forward sensor data to Django when available ──
+            if (outletManager.hasNewReading()) {
+                // Build Django device ID: "SO-" + hex ID (e.g., "SO-FE")
+                String djangoId = String(DEVICE_ID_PREFIX) + outletManager.getLastPolledHexId();
+                float currentMA = outletManager.getLastCurrentMA();
+                outletManager.clearNewReading();
+
+                int code = cloud.sendSensorData(djangoId, currentMA);
+                if (code == 200) {
+                    if (cloudFailCount > 0) {
+                        Serial.println("✓ Cloud connection restored.");
+                    }
+                    cloudFailCount = 0;
+                } else {
+                    cloudFailCount++;
+                    if (cloudFailCount == 1) {
+                        Serial.println("✗ Cloud unreachable. Retrying silently...");
+                    } else if (cloudFailCount % 6 == 0) {
+                        Serial.println("✗ Cloud still unreachable (" + String(cloudFailCount) + " attempts).");
+                    }
+                }
+            }
+
+            // ── Forward overload events to Django ──
+            if (outletManager.isOverloadDetected()) {
+                String djangoId = String(DEVICE_ID_PREFIX) + outletManager.getLastPolledHexId();
+                outletManager.clearOverload();
+
+                Serial.println("[Event] Overload → sending to server...");
+                cloud.sendEventLog(djangoId, "overload", "critical",
+                    "Overload trip detected — relay auto-cutoff");
+            }
+
+            // ── Auto-poll sensors (round-robin all outlets) ──
+            if (millis() - lastSensorPoll >= SENSOR_POLL_INTERVAL_MS) {
+                lastSensorPoll = millis();
+                outletManager.pollNextDevice();
+            }
+
+            // ── Check WiFi connectivity ──
             if (!wifiManager.isConnected()) {
                 Serial.println("WiFi lost! Attempting reconnection...");
                 statusLED.setPattern(LEDPattern::FAST_BLINK);
@@ -216,33 +260,6 @@ void loop() {
                     Serial.println("Reconnection failed. Entering setup mode.");
                     enterSetupMode();
                     return;
-                }
-            }
-
-            // Periodic data sending (placeholder)
-            if (millis() - lastCloudSend >= CLOUD_SEND_INTERVAL_MS) {
-                lastCloudSend = millis();
-
-                // Example JSON payload — customize for your sensors
-                String payload = "{\"device\":\"CCU\",\"uptime\":" + String(millis() / 1000) + "}";
-                int responseCode = cloud.sendData(payload);
-
-                if (responseCode == 200) {
-                    if (cloudFailCount > 0) {
-                        Serial.println("✓ Cloud connection restored.");
-                    }
-                    cloudFailCount = 0;
-                    statusLED.setPattern(LEDPattern::SOLID);
-                } else {
-                    cloudFailCount++;
-                    if (cloudFailCount == 1) {
-                        // Only log the first failure
-                        Serial.println("✗ Cloud unreachable. Retrying silently...");
-                    } else if (cloudFailCount % 6 == 0) {
-                        // Reminder every ~60 seconds
-                        Serial.println("✗ Cloud still unreachable (" + String(cloudFailCount) + " attempts).");
-                    }
-                    statusLED.setPattern(LEDPattern::SOLID);
                 }
             }
             break;

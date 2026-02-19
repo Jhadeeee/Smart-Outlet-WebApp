@@ -46,6 +46,13 @@ public:
     void setMasterID(uint8_t newId);
     void ping();
 
+    // ─── Multi-Device Polling ───────────────
+    // Register a known device (call at startup)
+    void registerDevice(uint8_t deviceId);
+
+    // Poll the next device in round-robin (call on timer)
+    void pollNextDevice();
+
     // ─── Device Management ──────────────────
     // Select a device by ID (creates/finds it in the device array)
     void selectDevice(uint8_t deviceId);
@@ -55,6 +62,25 @@ public:
 
     // Get the active device's ID
     uint8_t getActiveDeviceId() const;
+
+    // ─── Sensor Data Access ─────────────────
+    // Get the combined (R1 + R2) current reading in mA
+    float getLastCurrentMA() const;
+
+    // Get individual relay currents
+    float getRelay1CurrentMA() const;
+    float getRelay2CurrentMA() const;
+
+    // Check if a complete reading (both relays) is available
+    bool hasNewReading() const;
+    void clearNewReading();
+
+    // Check if an overload was detected
+    bool isOverloadDetected() const;
+    void clearOverload();
+
+    // Get the hex device ID of the POLLED outlet (e.g., "FE")
+    String getLastPolledHexId() const;
 
     // ─── HC-12 Utilities ────────────────────
     // Send an AT command to the HC-12 module
@@ -78,6 +104,17 @@ private:
     // RX buffer for packet assembly
     uint8_t       _rxBuffer[RF_PACKET_SIZE];
     uint8_t       _rxIndex;
+
+    // Sensor data tracking (per-outlet, combined relays)
+    uint8_t       _lastPolledDeviceId;  // Which outlet was polled
+    float         _relay1Current;       // R1 current in mA (sender=0x01)
+    float         _relay2Current;       // R2 current in mA (sender=0x02)
+    bool          _gotRelay1;           // Received R1 data for this poll
+    bool          _gotRelay2;           // Received R2 data for this poll
+    float         _lastTotalCurrent;    // Combined R1+R2 in mA
+    bool          _newReading;          // Both relays received — ready to send
+    bool          _overloadDetected;
+    uint8_t       _pollIndex;           // Round-robin index for multi-device polling
 
     // ─── Internal Methods ───────────────────
     // Find device index by ID, returns -1 if not found
