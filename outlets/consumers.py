@@ -87,3 +87,29 @@ class SensorDataConsumer(AsyncWebsocketConsumer):
             return {'relay_a': outlet.relay_a, 'relay_b': outlet.relay_b}
         except Outlet.DoesNotExist:
             return None
+
+class BreakerDataConsumer(AsyncWebsocketConsumer):
+    async def connect(self):
+        self.ccu_id = self.scope['url_route']['kwargs']['ccu_id']
+        self.room_group_name = f'sensor_breaker_{self.ccu_id}'
+        
+        # Join room group
+        await self.channel_layer.group_add(
+            self.room_group_name,
+            self.channel_name
+        )
+        await self.accept()
+    
+    async def disconnect(self, close_code):
+        # Leave room group
+        await self.channel_layer.group_discard(
+            self.room_group_name,
+            self.channel_name
+        )
+    
+    async def sensor_update(self, event):
+        """Send breaker data to WebSocket"""
+        await self.send(text_data=json.dumps({
+            'type': 'sensor_data',
+            'data': event['data']
+        }))

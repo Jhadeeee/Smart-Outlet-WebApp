@@ -121,6 +121,7 @@ def home_view(request):
         'user': request.user,
         'outlet_data': outlet_data,
         'total_current_amps': round(total_current / 1000.0, 2),
+        'ccu_id': latest_breaker.ccu_id if latest_breaker else '01',
         'active_count': active_count,
         'inactive_count': inactive_count,
         'outlet_count': len(outlet_data),

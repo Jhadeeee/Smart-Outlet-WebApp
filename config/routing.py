@@ -1,8 +1,9 @@
 from django.urls import re_path
-from outlets.consumers import SensorDataConsumer
+from outlets.consumers import SensorDataConsumer, BreakerDataConsumer
 from chatbot.consumers import ChatConsumer
 
 websocket_urlpatterns = [
     re_path(r'ws/sensor/(?P<outlet_id>\w+)/$', SensorDataConsumer.as_asgi()),
+    re_path(r'ws/breaker/(?P<ccu_id>\w+)/$', BreakerDataConsumer.as_asgi()),
     re_path(r'ws/chat/$', ChatConsumer.as_asgi()),
 ]

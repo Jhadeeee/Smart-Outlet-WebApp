@@ -897,9 +897,12 @@
                                         </div>
                                         <div class="outlet-device-id">
                                             ID: 0x{{ item.outlet.device_id }}
-                                            {% if item.outlet.location %} · {{ item.outlet.location }}{% endif %}
-                                            {% if item.outlet.threshold %} · Limit: {{ item.outlet.threshold }}mA{%
-                                            endif %}
+                                            {% if item.outlet.location %}
+                                            · {{ item.outlet.location }}
+                                            {% endif %}
+                                            {% if item.outlet.threshold %}
+                                            · Limit: {{ item.outlet.threshold }}mA
+                                            {% endif %}
                                         </div>
                                     </div>
                                 </div>
@@ -1040,11 +1043,76 @@
             if (e.key === 'Escape') profileDropdown.classList.remove('show');
         });
 
-        // ─── Auto-refresh data every 10s ───
-        setInterval(() => {
-            location.reload();
-        }, 15000);
-    </script>
-</body>
 
-</html>
+        // ─── WebSocket Connections ───
+        function connectWebSocket(deviceId, isBreaker = false) {
+            const wsScheme = window.location.protocol === "https:" ? "wss" : "ws";
+            const wsPath = isBreaker ? `/ws/breaker/${deviceId}/` : `/ws/sensor/${deviceId}/`;
+            const ws = new WebSocket(`${wsScheme}://${window.location.host}${wsPath}`);
+
+            ws.onmessage = function (e) {
+                const data = JSON.parse(e.data);
+                if (data.type === 'sensor_data' || data.type === 'initial_data') {
+                    const payload = data.data;
+
+                    if (isBreaker) {
+                        // Update Total Load Current
+                        const totalEl = document.getElementById('totalCurrent');
+                        if (totalEl && payload.current_amps !== undefined) {
+                            totalEl.innerHTML = `${payload.current_amps.toFixed(2)}<span class="total-load-unit">A</span>`;
+                        }
+                    } else {
+                        // Update Outlet Data
+                        const curAEl = document.getElementById(`cur-a-${payload.device_id}`);
+                        const curBEl = document.getElementById(`cur-b-${payload.device_id}`);
+
+                        if (curAEl) curAEl.innerHTML = `${(payload.current_a / 1000.0).toFixed(2)}<span class="unit">A</span>`;
+                        if (curBEl) curBEl.innerHTML = `${(payload.current_b / 1000.0).toFixed(2)}<span class="unit">A</span>`;
+
+                        // Update Outlet subtitle/total amps
+                        const cardEl = document.getElementById(`outlet-${payload.device_id}`);
+                        if (cardEl) {
+                            const subtitleEl = cardEl.querySelector('.outlet-subtitle');
+                            const iconEl = cardEl.querySelector('.outlet-icon');
+
+                            const totalAmps = ((payload.current_a + payload.current_b) / 1000.0).toFixed(2);
+                            let statusText = 'Inactive';
+                            if (payload.is_overload) {
+                                statusText = '<span style="color: var(--danger-red)">OVERLOAD</span>';
+                                iconEl.classList.add('overload');
+                            } else {
+                                statusText = (payload.relay_a || payload.relay_b) ? 'Active' : 'Inactive';
+                                iconEl.classList.remove('overload');
+                            }
+
+                            if (subtitleEl) subtitleEl.innerHTML = `${totalAmps} A · ${statusText}`;
+
+                            // Update toggle switch UI
+                            const toggleA = cardEl.querySelector('input[onchange*="\'a\'"]');
+                            const toggleB = cardEl.querySelector('input[onchange*="\'b\'"]');
+                            if (toggleA) toggleA.checked = payload.relay_a;
+                            if (toggleB) toggleB.checked = payload.relay_b;
+                        }
+                    }
+                }
+            };
+
+            ws.onclose = function (e) {
+                console.log(`WebSocket closed for ${deviceId}. Reconnecting...`);
+                setTimeout(() => connectWebSocket(deviceId, isBreaker), 5000);
+            };
+        }
+
+        // Initialize WebSockets for outlets
+        {% for item in outlet_data %}
+        connectWebSocket('{{ item.outlet.device_id }}');
+        {% endfor %}
+
+        // Initialize Breaker WebSocket
+        const ccuId = '{{ ccu_id }}';
+        if (ccuId) {
+            connectWebSocket(ccuId, true);
+        }
+
+
+</html >
