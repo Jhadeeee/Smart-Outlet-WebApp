@@ -50,6 +50,7 @@
 #include "src/HC12_RF/OutletManager.h"
 #include "src/LocalDashboard/SerialCLI.h"
 #include "src/LocalDashboard/Dashboard.h"
+#include "src/SCTSensor/SCTSensor.h"
 
 // ─── Global Objects ─────────────────────────────────────────
 ConfigStorage  configStorage;
@@ -60,6 +61,7 @@ StatusLED      statusLED;
 OutletManager  outletManager;
 SerialCLI      serialCLI(outletManager);
 Dashboard      dashboard(outletManager, configStorage);
+SCTSensor      sctSensor;
 
 // ─── State Machine ──────────────────────────────────────────
 enum class DeviceMode {
@@ -72,6 +74,7 @@ DeviceMode currentMode = DeviceMode::SETUP;
 
 // ─── Timing ─────────────────────────────────────────────────
 unsigned long lastCloudSend = 0;
+unsigned long lastSCTRead   = 0;
 unsigned int  cloudFailCount = 0;    // Tracks consecutive failures to suppress spam
 
 // ─── Factory Reset Check ────────────────────────────────────
@@ -155,6 +158,9 @@ void enterRunningMode() {
     // Initialize HC-12 outlet communication + dashboard
     outletManager.begin();
     serialCLI.begin();
+
+    // Initialize SCT-013 current sensor (main breaker)
+    sctSensor.begin(SCT_ADC_PIN);
     dashboard.begin();
 
     Serial.println("\n✓ HC-12 RF + Serial CLI + Dashboard ready.");
@@ -259,6 +265,26 @@ void loop() {
                     Serial.println("Reconnection failed. Entering setup mode.");
                     enterSetupMode();
                     return;
+                }
+            }
+
+            // ─── SCT Sensor: Read and send main breaker current ───
+            if (millis() - lastSCTRead >= SCT_READ_INTERVAL_MS) {
+                lastSCTRead = millis();
+                int breakerMA = sctSensor.readCurrentRMS();
+
+                // Build JSON: {"ccu_id": "01", "current_ma": 4500}
+                String ccuHex = String(CCU_SENDER_ID, HEX);
+                ccuHex.toUpperCase();
+
+                String breakerPayload = "{";
+                breakerPayload += "\"ccu_id\":\"" + ccuHex + "\",";
+                breakerPayload += "\"current_ma\":" + String(breakerMA);
+                breakerPayload += "}";
+
+                int rc = cloud.sendToEndpoint("/api/breaker-data/", breakerPayload);
+                if (rc == 200) {
+                    Serial.println("[SCT] Sent breaker current: " + String(breakerMA) + "mA");
                 }
             }
 

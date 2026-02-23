@@ -23,6 +23,9 @@ public:
     // Send JSON data to server via POST /api/data/
     int sendData(const String& jsonPayload);
 
+    // Send JSON data to a custom endpoint (e.g., /api/breaker-data/)
+    int sendToEndpoint(const String& endpoint, const String& jsonPayload);
+
     // Poll for pending commands via GET /api/commands/<deviceId>/
     // Returns the raw JSON response body (caller parses it)
     String fetchCommands(const String& deviceId);

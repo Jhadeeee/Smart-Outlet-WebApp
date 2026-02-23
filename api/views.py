@@ -1,7 +1,7 @@
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
-from outlets.models import Outlet, SensorData, Alert, PendingCommand
+from outlets.models import Outlet, SensorData, Alert, PendingCommand, MainBreakerReading
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 import json
@@ -114,6 +114,74 @@ def receive_sensor_data(request):
             'message': 'Data received successfully',
             'relay_a': outlet.relay_a,
             'relay_b': outlet.relay_b,
+        })
+        
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'message': 'Invalid JSON format'
+        }, status=400)
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def receive_breaker_data(request):
+    """
+    API endpoint for CCU to send main breaker (SCT-013) readings.
+    URL: POST /api/breaker-data/
+    
+    Expected JSON payload from CCU firmware:
+    {
+        "ccu_id": "01",
+        "current_ma": 4500
+    }
+    """
+    try:
+        data = json.loads(request.body)
+        
+        # Validate required fields
+        required_fields = ['ccu_id', 'current_ma']
+        if not all(field in data for field in required_fields):
+            return JsonResponse({
+                'success': False,
+                'message': f'Missing required fields. Required: {required_fields}'
+            }, status=400)
+        
+        ccu_id = str(data['ccu_id']).upper()
+        current_ma = int(data['current_ma'])
+        
+        # Save breaker reading
+        reading = MainBreakerReading.objects.create(
+            ccu_id=ccu_id,
+            current_ma=current_ma,
+        )
+        
+        # Send real-time update via WebSocket
+        try:
+            channel_layer = get_channel_layer()
+            async_to_sync(channel_layer.group_send)(
+                f'sensor_breaker_{ccu_id}',
+                {
+                    'type': 'sensor_update',
+                    'data': {
+                        'ccu_id': ccu_id,
+                        'current_ma': current_ma,
+                        'current_amps': round(current_ma / 1000.0, 2),
+                        'timestamp': reading.timestamp.isoformat(),
+                    }
+                }
+            )
+        except Exception:
+            pass  # WebSocket is best-effort
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Breaker data received successfully',
         })
         
     except json.JSONDecodeError:

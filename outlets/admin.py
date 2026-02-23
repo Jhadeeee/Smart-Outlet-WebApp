@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Outlet, SensorData, OutletSchedule, Alert, UserProfile, PendingCommand
+from .models import Outlet, SensorData, OutletSchedule, Alert, UserProfile, PendingCommand, MainBreakerReading
 
 @admin.register(UserProfile)
 class UserProfileAdmin(admin.ModelAdmin):
@@ -41,3 +41,11 @@ class PendingCommandAdmin(admin.ModelAdmin):
     list_filter = ['command', 'is_executed', 'created_at']
     search_fields = ['outlet__name']
     readonly_fields = ['created_at']
+
+@admin.register(MainBreakerReading)
+class MainBreakerReadingAdmin(admin.ModelAdmin):
+    list_display = ['ccu_id', 'current_ma', 'timestamp']
+    list_filter = ['ccu_id', 'timestamp']
+    search_fields = ['ccu_id']
+    readonly_fields = ['timestamp']
+    date_hierarchy = 'timestamp'

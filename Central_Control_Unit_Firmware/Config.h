@@ -44,6 +44,15 @@
 #define CCU_SENDER_ID    0x01             // Must match PIC's DEFAULT_ID_MASTER
 #define MAX_OUTLETS      8                // Maximum number of smart outlets
 
+// ─── SCT-013 Current Sensor (Main Breaker) ─────────────────
+#define SCT_ADC_PIN          34               // ESP32 ADC1 GPIO 34 (input-only)
+#define SCT_VREF             3.3              // ESP32 ADC reference voltage
+#define SCT_ADC_RESOLUTION   4096             // 12-bit ADC
+#define SCT_ADC_MIDPOINT     1862             // ~1.5V bias point (adjust to divider)
+#define SCT_CALIBRATION      60.6             // SCT-013 100A:50mA w/ 33 ohm burden
+#define SCT_SAMPLES          1480             // Samples per measurement (~1 AC cycle)
+#define SCT_READ_INTERVAL_MS 5000             // Read SCT sensor every 5 seconds
+
 // ─── Serial ─────────────────────────────────────────────────
 #define SERIAL_BAUD      115200
 

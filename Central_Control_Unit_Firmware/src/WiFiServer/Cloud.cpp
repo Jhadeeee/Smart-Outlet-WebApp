@@ -51,6 +51,30 @@ int Cloud::sendData(const String& jsonPayload) {
     return _lastResponseCode;
 }
 
+int Cloud::sendToEndpoint(const String& endpoint, const String& jsonPayload) {
+    if (_serverUrl.length() == 0 || WiFi.status() != WL_CONNECTED) {
+        return -1;
+    }
+
+    HTTPClient http;
+    String url = _serverUrl + endpoint;
+
+    http.begin(url);
+    http.addHeader("Content-Type", "application/json");
+    http.setTimeout(HTTP_TIMEOUT_MS);
+
+    _lastResponseCode = http.POST(jsonPayload);
+
+    if (_lastResponseCode > 0) {
+        _lastResponse = http.getString();
+    } else {
+        _lastResponse = http.errorToString(_lastResponseCode);
+    }
+
+    http.end();
+    return _lastResponseCode;
+}
+
 String Cloud::fetchCommands(const String& deviceId) {
     if (_serverUrl.length() == 0 || WiFi.status() != WL_CONNECTED) {
         return "";

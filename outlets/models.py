@@ -71,6 +71,26 @@ class SensorData(models.Model):
         return f"{self.outlet.name} - {self.timestamp.strftime('%Y-%m-%d %H:%M:%S')}"
 
 
+class MainBreakerReading(models.Model):
+    """
+    Total load current from SCT-013 sensor on the main breaker wire.
+    Read directly by ESP32 ADC — independent of smart outlet data.
+    """
+    ccu_id = models.CharField(max_length=10, help_text="CCU sender ID, e.g. '01'")
+    current_ma = models.IntegerField(help_text="Total load current in mA from SCT sensor")
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['-timestamp']),
+            models.Index(fields=['ccu_id', '-timestamp']),
+        ]
+
+    def __str__(self):
+        return f"Breaker [{self.ccu_id}] {self.current_ma}mA @ {self.timestamp.strftime('%Y-%m-%d %H:%M:%S')}"
+
+
 class OutletSchedule(models.Model):
     """Schedule for automatic outlet control"""
     outlet = models.ForeignKey(Outlet, on_delete=models.CASCADE, related_name='schedules')

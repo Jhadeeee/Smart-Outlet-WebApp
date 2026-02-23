@@ -4,7 +4,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.contrib import messages
 from django.http import JsonResponse
-from .models import Outlet, SensorData, UserProfile, PendingCommand
+from .models import Outlet, SensorData, UserProfile, PendingCommand, MainBreakerReading
 
 # ============ AUTHENTICATION VIEWS ============
 
@@ -91,15 +91,12 @@ def home_view(request):
     
     # Build outlet data with latest sensor readings
     outlet_data = []
-    total_current = 0
     
     for outlet in outlets:
         latest = outlet.sensor_data.first()  # ordered by -timestamp
         cur_a = latest.current_a if latest else 0
         cur_b = latest.current_b if latest else 0
         is_overload = latest.is_overload if latest else False
-        
-        total_current += cur_a + cur_b
         
         outlet_data.append({
             'outlet': outlet,
@@ -111,6 +108,11 @@ def home_view(request):
             'is_overload': is_overload,
             'has_data': latest is not None,
         })
+    
+    # Get total load from SCT-013 sensor (main breaker)
+    # The CCU sends breaker readings with its ccu_id
+    latest_breaker = MainBreakerReading.objects.first()  # ordered by -timestamp
+    total_current = latest_breaker.current_ma if latest_breaker else 0
     
     active_count = sum(1 for o in outlets if o.relay_a or o.relay_b)
     inactive_count = len(outlet_data) - active_count
