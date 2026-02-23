@@ -4,7 +4,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.contrib import messages
 from django.http import JsonResponse
-from .models import Outlet, SensorData, UserProfile
+from .models import Outlet, SensorData, UserProfile, PendingCommand
 
 # ============ AUTHENTICATION VIEWS ============
 
@@ -121,16 +121,39 @@ def outlet_detail(request, device_id):
 
 @login_required
 def toggle_outlet(request, device_id):
-    """Toggle outlet ON/OFF status"""
+    """
+    Toggle outlet relay ON/OFF.
+    Expects POST with 'socket' param ('a' or 'b').
+    Creates a PendingCommand for the CCU to pick up.
+    """
     if request.method == 'POST':
         outlet = get_object_or_404(Outlet, device_id=device_id, user=request.user)
-        outlet.is_active = not outlet.is_active
+        socket = request.POST.get('socket', 'a').lower()
+        
+        if socket not in ('a', 'b'):
+            return JsonResponse({'success': False, 'message': 'Invalid socket. Use "a" or "b".'})
+        
+        # Toggle the relay state in DB
+        if socket == 'a':
+            outlet.relay_a = not outlet.relay_a
+            new_state = outlet.relay_a
+        else:
+            outlet.relay_b = not outlet.relay_b
+            new_state = outlet.relay_b
         outlet.save()
+        
+        # Queue command for CCU to pick up
+        PendingCommand.objects.create(
+            outlet=outlet,
+            command='relay_on' if new_state else 'relay_off',
+            socket=socket,
+        )
         
         return JsonResponse({
             'success': True,
-            'is_active': outlet.is_active,
-            'message': f'Outlet turned {"ON" if outlet.is_active else "OFF"}'
+            'relay_a': outlet.relay_a,
+            'relay_b': outlet.relay_b,
+            'message': f'Socket {socket.upper()} turned {"ON" if new_state else "OFF"}'
         })
     
     return JsonResponse({'success': False, 'message': 'Invalid request method'})

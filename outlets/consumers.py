@@ -34,8 +34,9 @@ class SensorDataConsumer(AsyncWebsocketConsumer):
         """Receive message from WebSocket"""
         data = json.loads(text_data)
         
-        if data.get('type') == 'toggle_outlet':
-            await self.toggle_outlet_status()
+        if data.get('type') == 'toggle_relay':
+            socket = data.get('socket', 'a')
+            await self.toggle_relay(socket)
     
     async def sensor_update(self, event):
         """Send sensor data to WebSocket"""
@@ -53,24 +54,36 @@ class SensorDataConsumer(AsyncWebsocketConsumer):
             if latest:
                 return {
                     'outlet_name': outlet.name,
-                    'is_active': outlet.is_active,
-                    'voltage': latest.voltage,
-                    'current': latest.current,
-                    'power': latest.power,
-                    'energy': latest.energy,
-                    'temperature': latest.temperature,
+                    'device_id': outlet.device_id,
+                    'relay_a': outlet.relay_a,
+                    'relay_b': outlet.relay_b,
+                    'current_a': latest.current_a,
+                    'current_b': latest.current_b,
+                    'is_overload': latest.is_overload,
                     'timestamp': latest.timestamp.isoformat(),
                 }
-            return None
+            return {
+                'outlet_name': outlet.name,
+                'device_id': outlet.device_id,
+                'relay_a': outlet.relay_a,
+                'relay_b': outlet.relay_b,
+                'current_a': 0,
+                'current_b': 0,
+                'is_overload': False,
+                'timestamp': None,
+            }
         except Outlet.DoesNotExist:
             return None
     
     @database_sync_to_async
-    def toggle_outlet_status(self):
+    def toggle_relay(self, socket):
         try:
             outlet = Outlet.objects.get(device_id=self.outlet_id)
-            outlet.is_active = not outlet.is_active
+            if socket == 'a':
+                outlet.relay_a = not outlet.relay_a
+            elif socket == 'b':
+                outlet.relay_b = not outlet.relay_b
             outlet.save()
-            return outlet.is_active
+            return {'relay_a': outlet.relay_a, 'relay_b': outlet.relay_b}
         except Outlet.DoesNotExist:
             return None

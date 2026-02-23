@@ -29,12 +29,14 @@ def save_user_profile(sender, instance, **kwargs):
 
 
 class Outlet(models.Model):
-    """Smart Outlet Device Model"""
+    """Smart Outlet Device Model — matches CCU firmware OutletDevice"""
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='outlets')
     name = models.CharField(max_length=100)
-    device_id = models.CharField(max_length=50, unique=True)
+    device_id = models.CharField(max_length=10, unique=True, help_text="Hex device ID, e.g. 'FE'")
     location = models.CharField(max_length=100, blank=True)
-    is_active = models.BooleanField(default=False)  # ON/OFF status
+    relay_a = models.BooleanField(default=False, help_text="Socket A relay state (ON/OFF)")
+    relay_b = models.BooleanField(default=False, help_text="Socket B relay state (ON/OFF)")
+    threshold = models.IntegerField(default=0, help_text="Current threshold in mA")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -46,13 +48,16 @@ class Outlet(models.Model):
 
 
 class SensorData(models.Model):
-    """Sensor readings from ESP32"""
+    """
+    Current readings from Smart Outlets via CCU.
+    
+    Each PIC16F88 outlet reports current per socket (A/B) in mA.
+    A reading of 0xFFFF indicates an overload trip.
+    """
     outlet = models.ForeignKey(Outlet, on_delete=models.CASCADE, related_name='sensor_data')
-    voltage = models.FloatField(help_text="Voltage in Volts (V)")
-    current = models.FloatField(help_text="Current in Amperes (A)")
-    power = models.FloatField(help_text="Power in Watts (W)")
-    energy = models.FloatField(default=0, help_text="Energy consumed in kWh")
-    temperature = models.FloatField(null=True, blank=True, help_text="Temperature in Celsius")
+    current_a = models.IntegerField(default=0, help_text="Socket A current in mA")
+    current_b = models.IntegerField(default=0, help_text="Socket B current in mA")
+    is_overload = models.BooleanField(default=False, help_text="True if 0xFFFF overload trip detected")
     timestamp = models.DateTimeField(auto_now_add=True)
     
     class Meta:
@@ -64,13 +69,6 @@ class SensorData(models.Model):
     
     def __str__(self):
         return f"{self.outlet.name} - {self.timestamp.strftime('%Y-%m-%d %H:%M:%S')}"
-    
-    @property
-    def power_factor(self):
-        """Calculate power factor"""
-        if self.voltage and self.current and self.voltage * self.current > 0:
-            return self.power / (self.voltage * self.current)
-        return 0
 
 
 class OutletSchedule(models.Model):
@@ -89,9 +87,8 @@ class OutletSchedule(models.Model):
 class Alert(models.Model):
     """Alerts for abnormal conditions"""
     ALERT_TYPES = [
-        ('high_power', 'High Power Consumption'),
-        ('high_temp', 'High Temperature'),
-        ('voltage_spike', 'Voltage Spike'),
+        ('overload', 'Overload Trip'),
+        ('threshold', 'Threshold Exceeded'),
         ('offline', 'Device Offline'),
     ]
     
@@ -106,3 +103,32 @@ class Alert(models.Model):
     
     def __str__(self):
         return f"{self.get_alert_type_display()} - {self.outlet.name}"
+
+
+class PendingCommand(models.Model):
+    """
+    Commands queued from the Online UI for the CCU to pick up via polling.
+    
+    The CCU periodically GETs /api/commands/<device_id>/ to fetch and execute
+    pending commands, then marks them as executed.
+    """
+    COMMAND_CHOICES = [
+        ('relay_on', 'Relay ON'),
+        ('relay_off', 'Relay OFF'),
+        ('set_threshold', 'Set Threshold'),
+        ('read_sensors', 'Read Sensors'),
+        ('ping', 'Ping'),
+    ]
+    
+    outlet = models.ForeignKey(Outlet, on_delete=models.CASCADE, related_name='pending_commands')
+    command = models.CharField(max_length=20, choices=COMMAND_CHOICES)
+    socket = models.CharField(max_length=1, blank=True, help_text="'a', 'b', or '' for device-level commands")
+    value = models.IntegerField(null=True, blank=True, help_text="For threshold values (mA)")
+    created_at = models.DateTimeField(auto_now_add=True)
+    is_executed = models.BooleanField(default=False)
+    
+    class Meta:
+        ordering = ['created_at']
+    
+    def __str__(self):
+        return f"{self.command} → {self.outlet.name} ({self.created_at.strftime('%H:%M:%S')})"

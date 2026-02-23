@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Outlet, SensorData, OutletSchedule, Alert, UserProfile
+from .models import Outlet, SensorData, OutletSchedule, Alert, UserProfile, PendingCommand
 
 @admin.register(UserProfile)
 class UserProfileAdmin(admin.ModelAdmin):
@@ -9,15 +9,15 @@ class UserProfileAdmin(admin.ModelAdmin):
 
 @admin.register(Outlet)
 class OutletAdmin(admin.ModelAdmin):
-    list_display = ['name', 'device_id', 'user', 'location', 'is_active', 'created_at']
-    list_filter = ['is_active', 'created_at']
+    list_display = ['name', 'device_id', 'user', 'location', 'relay_a', 'relay_b', 'threshold', 'created_at']
+    list_filter = ['relay_a', 'relay_b', 'created_at']
     search_fields = ['name', 'device_id', 'location']
     readonly_fields = ['created_at', 'updated_at']
 
 @admin.register(SensorData)
 class SensorDataAdmin(admin.ModelAdmin):
-    list_display = ['outlet', 'voltage', 'current', 'power', 'energy', 'temperature', 'timestamp']
-    list_filter = ['outlet', 'timestamp']
+    list_display = ['outlet', 'current_a', 'current_b', 'is_overload', 'timestamp']
+    list_filter = ['outlet', 'is_overload', 'timestamp']
     search_fields = ['outlet__name']
     readonly_fields = ['timestamp']
     date_hierarchy = 'timestamp'
@@ -33,4 +33,11 @@ class AlertAdmin(admin.ModelAdmin):
     list_display = ['outlet', 'alert_type', 'is_read', 'created_at']
     list_filter = ['alert_type', 'is_read', 'created_at']
     search_fields = ['outlet__name', 'message']
+    readonly_fields = ['created_at']
+
+@admin.register(PendingCommand)
+class PendingCommandAdmin(admin.ModelAdmin):
+    list_display = ['outlet', 'command', 'socket', 'value', 'is_executed', 'created_at']
+    list_filter = ['command', 'is_executed', 'created_at']
+    search_fields = ['outlet__name']
     readonly_fields = ['created_at']
