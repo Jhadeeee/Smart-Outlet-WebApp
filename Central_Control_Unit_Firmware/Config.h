@@ -1,7 +1,7 @@
 /*
  * Config.h
  * --------
- * Global configuration constants for the CCU Firmware v2.0.0.
+ * Global configuration constants for the CCU Firmware v4.0.0.
  * Modify these values to match your hardware and preferences.
  */
 
@@ -43,6 +43,13 @@
 #define RF_PACKET_SIZE   8                // Fixed 8-byte packet size
 #define CCU_SENDER_ID    0x01             // Must match PIC's DEFAULT_ID_MASTER
 #define MAX_OUTLETS      8                // Maximum number of smart outlets
+
+// ─── Breaker Monitor (SCT013) ───────────────────────────────
+#define BREAKER_ADC_PIN              34   // ESP32 ADC pin (input-only, no pull-up)
+#define BREAKER_CT_TURNS             2000 // SCT013-100 turns ratio
+#define BREAKER_BURDEN_RESISTOR      23   // Burden resistor in Ohms
+#define BREAKER_LINE_FREQ            60   // Mains frequency (50 or 60 Hz)
+#define BREAKER_DEFAULT_THRESHOLD_MA 15000 // Default overload threshold (15A)
 
 // ─── Serial ─────────────────────────────────────────────────
 #define SERIAL_BAUD      115200

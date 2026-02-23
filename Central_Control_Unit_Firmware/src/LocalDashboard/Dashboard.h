@@ -5,6 +5,7 @@
  * PIC16F88 Smart Outlets via browser.
  *
  * Features:
+ *   - Main breaker monitoring (SCT013 current sensor)
  *   - Device list with add/rename/delete
  *   - Expandable device rows with toggle relay controls
  *   - Auto-polling current sensor values
@@ -24,10 +25,11 @@
 #include "../../Config.h"
 #include "../HC12_RF/OutletManager.h"
 #include "../SetupPage/ConfigStorage.h"
+#include "../BreakerMonitor/BreakerMonitor.h"
 
 class Dashboard {
 public:
-    Dashboard(OutletManager& manager, ConfigStorage& config);
+    Dashboard(OutletManager& manager, ConfigStorage& config, BreakerMonitor& breaker);
 
     // Start web server and register routes
     void begin();
@@ -39,9 +41,10 @@ public:
     void handleClient();
 
 private:
-    WebServer       _server;
-    OutletManager&  _manager;
-    ConfigStorage&  _config;
+    WebServer        _server;
+    OutletManager&   _manager;
+    ConfigStorage&   _config;
+    BreakerMonitor&  _breaker;
 
     // ─── Page Routes ─────────────────────────────
     void _handleDashboard();         // GET  /dashboard
@@ -61,6 +64,11 @@ private:
     void _handleApiSetMasterID();    // POST /api/master?value=0A
     void _handleApiStatus();         // GET  /api/status?index=0
     void _handleApiReadSensors();    // POST /api/sensors?index=0
+
+    // ─── Breaker Monitor API ─────────────────────
+    void _handleApiBreakerStatus();     // GET  /api/breaker
+    void _handleApiBreakerThreshold();  // POST /api/breaker/threshold?value=15000
+    void _handleApiBreakerCutDevice();  // POST /api/breaker/cut?index=0 (or index=all)
 
     // ─── HTML Builders ───────────────────────────
     String _buildDashboardPage();

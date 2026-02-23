@@ -1,6 +1,6 @@
 /*
  * ═══════════════════════════════════════════════════════════
- *   CCU Firmware v2.0.0 — Central Control Unit for ESP32
+ *   CCU Firmware v4.0.0 — Central Control Unit for ESP32
  * ═══════════════════════════════════════════════════════════
  *
  *  SYSTEM ARCHITECTURE:
@@ -50,6 +50,7 @@
 #include "src/HC12_RF/OutletManager.h"
 #include "src/LocalDashboard/SerialCLI.h"
 #include "src/LocalDashboard/Dashboard.h"
+#include "src/BreakerMonitor/BreakerMonitor.h"
 
 // ─── Global Objects ─────────────────────────────────────────
 ConfigStorage  configStorage;
@@ -59,7 +60,8 @@ Cloud          cloud;
 StatusLED      statusLED;
 OutletManager  outletManager;
 SerialCLI      serialCLI(outletManager);
-Dashboard      dashboard(outletManager, configStorage);
+BreakerMonitor breakerMonitor;
+Dashboard      dashboard(outletManager, configStorage, breakerMonitor);
 
 // ─── State Machine ──────────────────────────────────────────
 enum class DeviceMode {
@@ -125,6 +127,7 @@ void enterLocalDashboardMode() {
     // Start dashboard web server + HC-12
     dashboard.begin();
     outletManager.begin();
+    breakerMonitor.begin();
     serialCLI.begin();
     statusLED.setPattern(LEDPattern::SOLID);
 
@@ -156,6 +159,7 @@ void enterRunningMode() {
     outletManager.begin();
     serialCLI.begin();
     dashboard.begin();
+    breakerMonitor.begin();
 
     Serial.println("\n✓ HC-12 RF + Serial CLI + Dashboard ready.");
     Serial.println("  Dashboard: http://" + wifiManager.getLocalIP().toString() + "/dashboard");
@@ -171,7 +175,7 @@ void setup() {
 
     Serial.println("\n");
     Serial.println("═══════════════════════════════════════");
-    Serial.println("  CCU Firmware v2.0.0 — ESP32 Boot");
+    Serial.println("  CCU Firmware v4.0.0 — ESP32 Boot");
     Serial.println("═══════════════════════════════════════");
 
     // Initialize modules
@@ -228,6 +232,7 @@ void loop() {
         case DeviceMode::LOCAL_DASHBOARD:
             dashboard.handleClient();
             outletManager.update();
+            breakerMonitor.update();
             serialCLI.update();
             break;
 
@@ -235,6 +240,9 @@ void loop() {
         case DeviceMode::RUNNING:
             // HC-12 RF: read incoming packets from smart outlets
             outletManager.update();
+
+            // Breaker Monitor: read SCT013 sensor
+            breakerMonitor.update();
 
             // Serial CLI: handle debug commands from serial monitor
             serialCLI.update();

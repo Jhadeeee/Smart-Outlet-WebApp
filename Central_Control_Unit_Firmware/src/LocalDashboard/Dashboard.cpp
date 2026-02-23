@@ -7,10 +7,11 @@
 
 #include "Dashboard.h"
 
-Dashboard::Dashboard(OutletManager& manager, ConfigStorage& config)
+Dashboard::Dashboard(OutletManager& manager, ConfigStorage& config, BreakerMonitor& breaker)
     : _server(WEB_SERVER_PORT),
       _manager(manager),
-      _config(config) {}
+      _config(config),
+      _breaker(breaker) {}
 
 void Dashboard::begin() {
     // Page routes
@@ -32,6 +33,11 @@ void Dashboard::begin() {
     _server.on("/api/master",    HTTP_POST, [this]() { _handleApiSetMasterID(); });
     _server.on("/api/status",    HTTP_GET,  [this]() { _handleApiStatus(); });
     _server.on("/api/sensors",   HTTP_POST, [this]() { _handleApiReadSensors(); });
+
+    // Breaker Monitor API
+    _server.on("/api/breaker",           HTTP_GET,  [this]() { _handleApiBreakerStatus(); });
+    _server.on("/api/breaker/threshold", HTTP_POST, [this]() { _handleApiBreakerThreshold(); });
+    _server.on("/api/breaker/cut",       HTTP_POST, [this]() { _handleApiBreakerCutDevice(); });
 
     _server.begin();
     Serial.println("[Dashboard] Web server started on port " + String(WEB_SERVER_PORT));
@@ -348,6 +354,73 @@ void Dashboard::_handleApiReadSensors() {
 }
 
 // ════════════════════════════════════════════════════════════
+//  BREAKER MONITOR API
+// ════════════════════════════════════════════════════════════
+
+void Dashboard::_handleApiBreakerStatus() {
+    String json = "{";
+    json += "\"amps\":" + String(_breaker.getAmps(), 3) + ",";
+    json += "\"milliAmps\":" + String(_breaker.getMilliAmps()) + ",";
+    json += "\"threshold\":" + String(_breaker.getThreshold()) + ",";
+    json += "\"overload\":" + String(_breaker.isOverload() ? "true" : "false") + ",";
+    json += "\"hasReading\":" + String(_breaker.hasReading() ? "true" : "false");
+    json += "}";
+    _server.send(200, "application/json", json);
+}
+
+void Dashboard::_handleApiBreakerThreshold() {
+    String valStr = _server.arg("value");
+    if (valStr.length() == 0) {
+        _server.send(400, "application/json", "{\"error\":\"value required\"}");
+        return;
+    }
+    int mA = valStr.toInt();
+    if (mA <= 0) {
+        _server.send(400, "application/json", "{\"error\":\"value must be > 0\"}");
+        return;
+    }
+    _breaker.setThreshold(mA);
+    Serial.println("[Dashboard] Breaker threshold set to " + String(mA) + " mA");
+    _server.send(200, "application/json", "{\"ok\":true}");
+}
+
+void Dashboard::_handleApiBreakerCutDevice() {
+    String indexStr = _server.arg("index");
+    if (indexStr.length() == 0) {
+        _server.send(400, "application/json", "{\"error\":\"index required (number or 'all')\"}");
+        return;
+    }
+
+    if (indexStr == "all") {
+        // Cut ALL devices — both sockets
+        uint8_t total = _manager.getDeviceCount();
+        for (uint8_t i = 0; i < total; i++) {
+            _manager.selectDevice(_manager.getDevice(i).getDeviceId());
+            _manager.relayOff(SOCKET_A);
+            delay(50);  // Brief gap between commands
+            _manager.relayOff(SOCKET_B);
+            delay(50);
+        }
+        Serial.println("[Dashboard] BREAKER: Cut ALL power (" + String(total) + " devices)");
+        _server.send(200, "application/json", "{\"ok\":true,\"cut\":" + String(total) + "}");
+    } else {
+        // Cut a specific device — both sockets
+        uint8_t index = (uint8_t)indexStr.toInt();
+        if (index >= _manager.getDeviceCount()) {
+            _server.send(400, "application/json", "{\"error\":\"Invalid index\"}");
+            return;
+        }
+        _manager.selectDevice(_manager.getDevice(index).getDeviceId());
+        _manager.relayOff(SOCKET_A);
+        delay(50);
+        _manager.relayOff(SOCKET_B);
+        Serial.print("[Dashboard] BREAKER: Cut device ");
+        Serial.println(_manager.getDevice(index).getName());
+        _server.send(200, "application/json", "{\"ok\":true}");
+    }
+}
+
+// ════════════════════════════════════════════════════════════
 //  HTML: DASHBOARD PAGE
 // ════════════════════════════════════════════════════════════
 
@@ -447,6 +520,30 @@ String Dashboard::_buildDashboardPage() {
 
         /* Config warning */
         .warn{background:rgba(241,196,15,0.1);border:1px solid rgba(241,196,15,0.3);border-radius:6px;padding:8px 10px;font-size:11px;color:#f1c40f;margin-bottom:10px}
+
+        /* Breaker Monitor */
+        .breaker-card{border-color:rgba(243,156,18,0.4)}
+        .breaker-card .card-t{color:#f39c12}
+        .breaker-header{display:flex;align-items:center;cursor:pointer;padding:4px 0}
+        .breaker-header:hover .breaker-arrow{color:#f39c12}
+        .breaker-arrow{color:#f39c12;margin-right:10px;font-size:12px;transition:transform .2s}
+        .breaker-arrow.open{transform:rotate(90deg)}
+        .breaker-value{font-size:22px;font-weight:700;flex:1;transition:color .3s}
+        .breaker-value.ok{color:#2ecc71}
+        .breaker-value.warn{color:#f39c12}
+        .breaker-value.danger{color:#e74c3c}
+        .breaker-unit{font-size:13px;font-weight:400;color:#8888aa;margin-left:4px}
+        .breaker-body{display:none;padding-top:12px;border-top:1px solid rgba(255,255,255,0.06);margin-top:10px}
+        .breaker-body.open{display:block}
+        .breaker-dev-row{display:flex;align-items:center;padding:6px 0;font-size:13px}
+        .breaker-dev-name{flex:1;color:#b0b0cc}
+        .breaker-dev-id{color:#8888aa;font-size:11px;margin-right:8px}
+        .breaker-dev-cur{color:#e0e0ff;margin-right:10px;font-size:12px}
+        .btn-cut{padding:5px 12px;background:rgba(231,76,60,0.2);border:1px solid rgba(231,76,60,0.4);border-radius:6px;color:#e74c3c;font-size:11px;cursor:pointer;transition:all .2s}
+        .btn-cut:hover{background:rgba(231,76,60,0.35)}
+        .btn-cut-all{display:block;width:100%;padding:10px;background:rgba(231,76,60,0.15);border:1px solid rgba(231,76,60,0.4);border-radius:8px;color:#e74c3c;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;text-align:center;margin-bottom:10px}
+        .btn-cut-all:hover{background:rgba(231,76,60,0.3)}
+        .breaker-sep{height:1px;background:rgba(255,255,255,0.06);margin:8px 0}
     </style>
 </head>
 <body>
@@ -454,6 +551,26 @@ String Dashboard::_buildDashboardPage() {
     <div class="hdr">
         <h1>&#9889; Smart Outlet</h1>
         <div class="sub">Local Dashboard</div>
+    </div>
+
+    <!-- Main Breaker -->
+    <div class="card breaker-card">
+        <div class="card-t">&#9889; Main Breaker</div>
+        <div class="breaker-header" onclick="toggleBreaker()">
+            <span class="breaker-arrow" id="breakerArrow">&#9654;</span>
+            <span class="breaker-value ok" id="breakerValue">-- <span class="breaker-unit">A</span></span>
+        </div>
+        <div class="breaker-body" id="breakerBody">
+            <div class="thr-row" style="margin-top:0;padding-top:0;border-top:none">
+                <span class="thr-label">Threshold:</span>
+                <input class="thr-input" id="breakerThr" type="number" placeholder="15000">
+                <span class="thr-label">mA</span>
+                <button class="btn-sm" onclick="setBreakerThreshold()">Set</button>
+            </div>
+            <div class="breaker-sep"></div>
+            <button class="btn-cut-all" onclick="cutAll()">&#9940; Cut All Power</button>
+            <div id="breakerDevList"></div>
+        </div>
     </div>
 
     <!-- Master ID -->
@@ -722,6 +839,95 @@ function pollOnce(i){
 
 // Init
 loadDevices();
+
+// ─── BREAKER MONITOR ────────────────────────────
+var breakerExpanded=false;
+var breakerPollTimer=null;
+
+function toggleBreaker(){
+    breakerExpanded=!breakerExpanded;
+    document.getElementById('breakerArrow').className='breaker-arrow'+(breakerExpanded?' open':'');
+    document.getElementById('breakerBody').className='breaker-body'+(breakerExpanded?' open':'');
+    if(breakerExpanded){startBreakerPoll()}else{stopBreakerPoll()}
+}
+
+function startBreakerPoll(){
+    stopBreakerPoll();
+    pollBreakerOnce();
+    breakerPollTimer=setInterval(pollBreakerOnce,1500);
+}
+function stopBreakerPoll(){if(breakerPollTimer){clearInterval(breakerPollTimer);breakerPollTimer=null}}
+
+function pollBreakerOnce(){
+    api('GET','/api/breaker',function(b){
+        var el=document.getElementById('breakerValue');
+        if(!b.hasReading){el.innerHTML='-- <span class="breaker-unit">A</span>';el.className='breaker-value ok';return}
+        el.innerHTML=b.amps.toFixed(2)+' <span class="breaker-unit">A</span>';
+        var pct=b.threshold>0?(b.milliAmps/b.threshold):0;
+        if(pct>=1.0) el.className='breaker-value danger';
+        else if(pct>=0.8) el.className='breaker-value warn';
+        else el.className='breaker-value ok';
+        document.getElementById('breakerThr').placeholder=b.threshold;
+    });
+    // Also update per-device list if expanded
+    if(breakerExpanded && devices.length>0) renderBreakerDevices();
+}
+
+function renderBreakerDevices(){
+    var el=document.getElementById('breakerDevList');
+    if(devices.length===0){el.innerHTML='<div style="color:#555570;font-size:12px;text-align:center;padding:8px">No devices</div>';return}
+    var h='';
+    for(var i=0;i<devices.length;i++){
+        h+='<div class="breaker-dev-row">';
+        h+='<span class="breaker-dev-name">'+esc(devices[i].name)+'</span>';
+        h+='<span class="breaker-dev-id">'+devices[i].id+'</span>';
+        h+='<span class="breaker-dev-cur" id="bkrCur'+i+'">-- mA</span>';
+        h+='<button class="btn-cut" onclick="cutDevice('+i+')">Cut</button>';
+        h+='</div>';
+    }
+    el.innerHTML=h;
+    // Fetch latest current for each device
+    for(var i=0;i<devices.length;i++){(function(idx){
+        api('GET','/api/status?index='+idx,function(s){
+            var c=document.getElementById('bkrCur'+idx);
+            if(c){
+                var total=(s.currentA>=0?s.currentA:0)+(s.currentB>=0?s.currentB:0);
+                c.textContent=total+' mA';
+            }
+        });
+    })(i)}
+}
+
+function setBreakerThreshold(){
+    var v=document.getElementById('breakerThr').value;
+    if(!v||v<=0){toast('Enter valid mA',true);return}
+    api('POST','/api/breaker/threshold?value='+v,function(){toast('Breaker threshold: '+v+' mA')});
+}
+
+function cutAll(){
+    if(!confirm('Cut power to ALL devices?')) return;
+    api('POST','/api/breaker/cut?index=all',function(r){toast('All power cut ('+r.cut+' devices)');if(expanded>=0)pollOnce(expanded)});
+}
+
+function cutDevice(i){
+    if(!confirm('Cut power to '+devices[i].name+'?')) return;
+    api('POST','/api/breaker/cut?index='+i,function(){toast('Power cut: '+devices[i].name);if(expanded>=0)pollOnce(expanded)});
+}
+
+// Always poll breaker top-line reading (even when collapsed)
+setInterval(function(){
+    if(!breakerExpanded){
+        api('GET','/api/breaker',function(b){
+            var el=document.getElementById('breakerValue');
+            if(!b.hasReading){el.innerHTML='-- <span class="breaker-unit">A</span>';return}
+            el.innerHTML=b.amps.toFixed(2)+' <span class="breaker-unit">A</span>';
+            var pct=b.threshold>0?(b.milliAmps/b.threshold):0;
+            if(pct>=1.0) el.className='breaker-value danger';
+            else if(pct>=0.8) el.className='breaker-value warn';
+            else el.className='breaker-value ok';
+        });
+    }
+},3000);
 </script>
 </body>
 </html>
