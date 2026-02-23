@@ -2,6 +2,7 @@
  * Cloud.cpp
  * ----------
  * Implementation of HTTP server communication.
+ * Sends sensor data to Django /api/data/ and polls /api/commands/.
  */
 
 #include "Cloud.h"
@@ -32,7 +33,7 @@ int Cloud::sendData(const String& jsonPayload) {
     }
 
     HTTPClient http;
-    String endpoint = _serverUrl + "/api/data";  // Customize this endpoint
+    String endpoint = _serverUrl + "/api/data/";  // Django expects trailing slash
 
     http.begin(endpoint);
     http.addHeader("Content-Type", "application/json");
@@ -48,6 +49,28 @@ int Cloud::sendData(const String& jsonPayload) {
 
     http.end();
     return _lastResponseCode;
+}
+
+String Cloud::fetchCommands(const String& deviceId) {
+    if (_serverUrl.length() == 0 || WiFi.status() != WL_CONNECTED) {
+        return "";
+    }
+
+    HTTPClient http;
+    String endpoint = _serverUrl + "/api/commands/" + deviceId + "/";
+
+    http.begin(endpoint);
+    http.setTimeout(HTTP_TIMEOUT_MS);
+
+    _lastResponseCode = http.GET();
+
+    String body = "";
+    if (_lastResponseCode == 200) {
+        body = http.getString();
+    }
+
+    http.end();
+    return body;
 }
 
 bool Cloud::isReachable() {

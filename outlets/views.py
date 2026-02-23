@@ -82,28 +82,54 @@ def logout_view(request):
     return redirect('outlets:login')
 
 
-# ============ HOME PAGE ============
+# ============ HOME PAGE / DASHBOARD ============
 
 @login_required
 def home_view(request):
-    """Homepage - Welcome message"""
+    """Homepage — Main Dashboard with real outlet data"""
+    outlets = Outlet.objects.filter(user=request.user)
+    
+    # Build outlet data with latest sensor readings
+    outlet_data = []
+    total_current = 0
+    
+    for outlet in outlets:
+        latest = outlet.sensor_data.first()  # ordered by -timestamp
+        cur_a = latest.current_a if latest else 0
+        cur_b = latest.current_b if latest else 0
+        is_overload = latest.is_overload if latest else False
+        
+        total_current += cur_a + cur_b
+        
+        outlet_data.append({
+            'outlet': outlet,
+            'current_a': cur_a,
+            'current_b': cur_b,
+            'current_a_amps': round(cur_a / 1000.0, 2),
+            'current_b_amps': round(cur_b / 1000.0, 2),
+            'total_amps': round((cur_a + cur_b) / 1000.0, 2),
+            'is_overload': is_overload,
+            'has_data': latest is not None,
+        })
+    
+    active_count = sum(1 for o in outlets if o.relay_a or o.relay_b)
+    inactive_count = len(outlet_data) - active_count
+    
     context = {
         'user': request.user,
+        'outlet_data': outlet_data,
+        'total_current_amps': round(total_current / 1000.0, 2),
+        'active_count': active_count,
+        'inactive_count': inactive_count,
+        'outlet_count': len(outlet_data),
     }
     return render(request, 'home.html', context)
 
 
-# ============ DASHBOARD (for later) ============
-
 @login_required
 def dashboard(request):
-    """Main dashboard showing all outlets"""
-    outlets = Outlet.objects.filter(user=request.user)
-    
-    context = {
-        'outlets': outlets,
-    }
-    return render(request, 'index.html', context)
+    """Redirect dashboard to home"""
+    return redirect('outlets:home')
 
 @login_required
 def outlet_detail(request, device_id):

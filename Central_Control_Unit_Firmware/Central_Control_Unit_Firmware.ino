@@ -262,15 +262,110 @@ void loop() {
                 }
             }
 
-            // Periodic data sending (placeholder)
+            // Periodic data sending — send actual sensor data per outlet
             if (millis() - lastCloudSend >= CLOUD_SEND_INTERVAL_MS) {
                 lastCloudSend = millis();
 
-                // Example JSON payload — customize for your sensors
-                String payload = "{\"device\":\"CCU\",\"uptime\":" + String(millis() / 1000) + "}";
-                int responseCode = cloud.sendData(payload);
+                bool anySendOk = false;
+                uint8_t count = outletManager.getDeviceCount();
 
-                if (responseCode == 200) {
+                for (uint8_t i = 0; i < count; i++) {
+                    OutletDevice& dev = outletManager.getDevice(i);
+                    if (!dev.isActive()) continue;
+
+                    // Build JSON payload matching Django /api/data/ format
+                    String deviceHex = String(dev.getDeviceId(), HEX);
+                    deviceHex.toUpperCase();
+
+                    int curA = dev.getCurrentA();
+                    int curB = dev.getCurrentB();
+                    bool overload = (curA == 65535 || curB == 65535);
+
+                    String payload = "{";
+                    payload += "\"device_id\":\"" + deviceHex + "\",";
+                    payload += "\"current_a\":" + String(curA < 0 ? 0 : curA) + ",";
+                    payload += "\"current_b\":" + String(curB < 0 ? 0 : curB) + ",";
+                    payload += "\"relay_a\":" + String(dev.getRelayA() == 1 ? "true" : "false") + ",";
+                    payload += "\"relay_b\":" + String(dev.getRelayB() == 1 ? "true" : "false") + ",";
+                    payload += "\"is_overload\":" + String(overload ? "true" : "false");
+                    payload += "}";
+
+                    int responseCode = cloud.sendData(payload);
+                    if (responseCode == 200) anySendOk = true;
+                }
+
+                // Also poll for pending commands from the UI
+                for (uint8_t i = 0; i < count; i++) {
+                    OutletDevice& dev = outletManager.getDevice(i);
+                    if (!dev.isActive()) continue;
+
+                    String deviceHex = String(dev.getDeviceId(), HEX);
+                    deviceHex.toUpperCase();
+
+                    String cmdJson = cloud.fetchCommands(deviceHex);
+                    if (cmdJson.length() > 0) {
+                        // Select this device as target before executing commands
+                        outletManager.selectDevice(dev.getDeviceId());
+
+                        // Simple parsing: find each "command":"xxx" and "socket":"x"
+                        int searchFrom = 0;
+                        while (true) {
+                            int cmdIdx = cmdJson.indexOf("\"command\":", searchFrom);
+                            if (cmdIdx < 0) break;
+
+                            // Extract command value
+                            int valStart = cmdJson.indexOf("\"", cmdIdx + 10) + 1;
+                            int valEnd   = cmdJson.indexOf("\"", valStart);
+                            String cmd   = cmdJson.substring(valStart, valEnd);
+
+                            // Extract socket value
+                            String sock = "";
+                            int sockIdx = cmdJson.indexOf("\"socket\":", valEnd);
+                            if (sockIdx >= 0 && sockIdx < cmdJson.indexOf("}", valEnd) + 1) {
+                                int sStart = cmdJson.indexOf("\"", sockIdx + 9) + 1;
+                                int sEnd   = cmdJson.indexOf("\"", sStart);
+                                sock = cmdJson.substring(sStart, sEnd);
+                            }
+
+                            // Extract value (for threshold)
+                            int valFieldIdx = cmdJson.indexOf("\"value\":", valEnd);
+                            int cmdValue = 0;
+                            if (valFieldIdx >= 0 && valFieldIdx < cmdJson.indexOf("}", valEnd) + 1) {
+                                int numStart = valFieldIdx + 8;
+                                // Skip whitespace
+                                while (numStart < (int)cmdJson.length() && cmdJson[numStart] == ' ') numStart++;
+                                if (cmdJson[numStart] != 'n') {  // not "null"
+                                    cmdValue = cmdJson.substring(numStart).toInt();
+                                }
+                            }
+
+                            // Execute the command
+                            uint8_t socket = (sock == "b") ? SOCKET_B : SOCKET_A;
+
+                            if (cmd == "relay_on") {
+                                Serial.println("[Cloud CMD] Relay ON socket " + sock);
+                                outletManager.relayOn(socket);
+                            } else if (cmd == "relay_off") {
+                                Serial.println("[Cloud CMD] Relay OFF socket " + sock);
+                                outletManager.relayOff(socket);
+                            } else if (cmd == "set_threshold") {
+                                Serial.println("[Cloud CMD] Set threshold " + String(cmdValue) + "mA");
+                                outletManager.setThreshold(cmdValue);
+                            } else if (cmd == "read_sensors") {
+                                Serial.println("[Cloud CMD] Read sensors");
+                                outletManager.readSensors();
+                            } else if (cmd == "ping") {
+                                Serial.println("[Cloud CMD] Ping");
+                                outletManager.ping();
+                            }
+
+                            searchFrom = valEnd + 1;
+                        }
+                    }
+                }
+
+                // Status tracking
+                if (count == 0 || anySendOk) {
                     if (cloudFailCount > 0) {
                         Serial.println("✓ Cloud connection restored.");
                     }
@@ -279,10 +374,8 @@ void loop() {
                 } else {
                     cloudFailCount++;
                     if (cloudFailCount == 1) {
-                        // Only log the first failure
                         Serial.println("✗ Cloud unreachable. Retrying silently...");
                     } else if (cloudFailCount % 6 == 0) {
-                        // Reminder every ~60 seconds
                         Serial.println("✗ Cloud still unreachable (" + String(cloudFailCount) + " attempts).");
                     }
                     statusLED.setPattern(LEDPattern::SOLID);
