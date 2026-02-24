@@ -9,7 +9,7 @@ class GeminiClient:
             raise ValueError("Gemini API key not configured. Please set GEMINI_API_KEY in your .env file.")
         
         genai.configure(api_key=api_key)
-        self.model = genai.GenerativeModel('gemini-2.0-flash-lite')
+        self.model = genai.GenerativeModel('gemini-2.5-flash')
         self.system_prompt = self._load_system_prompt()
     
     def _load_system_prompt(self):
