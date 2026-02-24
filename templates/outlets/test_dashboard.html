@@ -287,6 +287,50 @@
     </div>
     </div>
 
+    <!-- Add Device Modal (Hidden by Default) -->
+    <div id="addDeviceModal"
+        class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl shadow-xl max-w-sm w-full overflow-hidden border border-slate-200">
+            <div class="px-5 py-4 border-b border-slate-100 flex justify-between items-center">
+                <h3 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                    <span class="text-indigo-500">🔌</span> Add New Device
+                </h3>
+                <button onclick="closeAddDeviceModal()" class="text-slate-400 hover:text-slate-600">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12">
+                        </path>
+                    </svg>
+                </button>
+            </div>
+            <div class="p-5 space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Device
+                        Name</label>
+                    <input type="text" id="newDeviceName" placeholder="e.g. Garage Outlet"
+                        class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-shadow">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Hardware Hex
+                        ID</label>
+                    <div class="flex items-center gap-2">
+                        <span
+                            class="text-slate-400 font-mono text-sm bg-slate-50 px-3 py-2 border border-r-0 border-slate-300 rounded-l-lg -mr-2 z-10">0x</span>
+                        <input type="text" id="newDeviceHex" placeholder="FE" maxlength="2"
+                            class="w-full px-3 py-2 border border-slate-300 rounded-r-lg font-mono text-sm uppercase focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-shadow">
+                    </div>
+                    <p class="text-[10px] text-slate-400 mt-1">Found on the bottom of the Smart Outlet.</p>
+                </div>
+            </div>
+            <div class="bg-slate-50 px-5 py-3 border-t border-slate-100 flex justify-end gap-3">
+                <button onclick="closeAddDeviceModal()"
+                    class="px-4 py-2 text-sm font-semibold text-slate-600 hover:text-slate-800 transition-colors">Cancel</button>
+                <button onclick="confirmAddDevice()"
+                    class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-lg transition-colors shadow-sm">Save
+                    Device</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Clear Logs Modal (Hidden by Default) -->
     <div id="clearLogsModal"
         class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -467,11 +511,29 @@
         }
 
         function addDevice() {
-            const hexId = prompt("Enter Device Hex ID (e.g. F2, FE, 01):", "F2");
-            if (!hexId) return;
-            const devName = prompt("Enter Device Name:", "Smart Outlet");
-            if (!devName) return;
+            document.getElementById('newDeviceName').value = 'Smart Outlet';
+            document.getElementById('newDeviceHex').value = '';
+            document.getElementById('addDeviceModal').classList.remove('hidden');
+        }
 
+        function closeAddDeviceModal() {
+            document.getElementById('addDeviceModal').classList.add('hidden');
+        }
+
+        function confirmAddDevice() {
+            const devName = document.getElementById('newDeviceName').value.trim();
+            const hexId = document.getElementById('newDeviceHex').value.trim().toUpperCase();
+
+            if (!hexId) {
+                alert("Please enter a Hex ID.");
+                return;
+            }
+            if (!devName) {
+                alert("Please enter a device name.");
+                return;
+            }
+
+            closeAddDeviceModal();
             sendCommand('CMD_ADD_DEVICE', 'ALL', { id: '0x' + hexId, name: devName });
         }
 
