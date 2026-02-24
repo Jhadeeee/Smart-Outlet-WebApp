@@ -275,9 +275,20 @@ void loop() {
                 lastCloudSend = millis();
                 bool anyFail = false;
 
-                // 1. Send Sensor Data for each Outlet
+                // 1. Request fresh sensor data & Send to Cloud
                 for (uint8_t i = 0; i < outletManager.getDeviceCount(); i++) {
                     OutletDevice& dev = outletManager.getDevice(i);
+                    
+                    // Request fresh data from PIC
+                    outletManager.selectDevice(dev.getDeviceId());
+                    outletManager.readSensors();
+                    
+                    // Briefly pump the RF receiver to catch the PIC's reply
+                    unsigned long waitStart = millis();
+                    while (millis() - waitStart < 150) {
+                        outletManager.update();
+                    }
+
                     String hexId = String(dev.getDeviceId(), HEX);
                     hexId.toUpperCase();
                     String payload = "{\"device_id\":\"";
