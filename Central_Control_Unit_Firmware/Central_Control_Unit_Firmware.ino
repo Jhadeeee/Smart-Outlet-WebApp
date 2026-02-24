@@ -278,10 +278,11 @@ void loop() {
                 // 1. Send Sensor Data for each Outlet
                 for (uint8_t i = 0; i < outletManager.getDeviceCount(); i++) {
                     OutletDevice& dev = outletManager.getDevice(i);
+                    String hexId = String(dev.getDeviceId(), HEX);
+                    hexId.toUpperCase();
                     String payload = "{\"device_id\":\"";
                     if (dev.getDeviceId() < 0x10) payload += "0";
-                    payload += String(dev.getDeviceId(), HEX) + "\",";
-                    payload.toUpperCase(); // Ensure hex is uppercase
+                    payload += hexId + "\",";
                     
                     payload += "\"current_a\":" + String(dev.getCurrentA()) + ",";
                     payload += "\"current_b\":" + String(dev.getCurrentB()) + ",";
@@ -295,10 +296,11 @@ void loop() {
 
                 // 2. Send Breaker Data
                 if (breakerMonitor.hasReading()) {
+                    String hexId = String(outletManager.getSenderID(), HEX);
+                    hexId.toUpperCase();
                     String breakerPayload = "{\"ccu_id\":\"";
                     if (outletManager.getSenderID() < 0x10) breakerPayload += "0";
-                    breakerPayload += String(outletManager.getSenderID(), HEX) + "\",";
-                    breakerPayload.toUpperCase();
+                    breakerPayload += hexId + "\",";
                     
                     breakerPayload += "\"current_ma\":" + String(breakerMonitor.getMilliAmps()) + "}";
                     
@@ -309,10 +311,9 @@ void loop() {
                 // 3. Fetch and Execute Commands
                 for (uint8_t i = 0; i < outletManager.getDeviceCount(); i++) {
                     OutletDevice& dev = outletManager.getDevice(i);
-                    String devIdStr = "";
-                    if (dev.getDeviceId() < 0x10) devIdStr += "0";
-                    devIdStr += String(dev.getDeviceId(), HEX);
+                    String devIdStr = String(dev.getDeviceId(), HEX);
                     devIdStr.toUpperCase();
+                    if (dev.getDeviceId() < 0x10) devIdStr = "0" + devIdStr;
                     
                     String jsonCommands = cloud.fetchCommands(devIdStr);
                     
