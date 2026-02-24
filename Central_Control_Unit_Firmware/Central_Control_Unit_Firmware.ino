@@ -362,13 +362,17 @@ void loop() {
                                            OutletDevice& dev = outletManager.getDevice(i);
                                            if (dev.getDeviceId() != 0x00 && dev.getDeviceId() != 0xFF) {
                                                Serial.printf("    > Sending KILL to Outlet 0x%02X\n", dev.getDeviceId());
-                                               outletManager.setRelays(dev.getDeviceId(), false, false);
+                                               outletManager.selectDevice(dev.getDeviceId());
+                                               outletManager.relayOff(SOCKET_A);
+                                               outletManager.relayOff(SOCKET_B);
                                                delay(150); // Small delay so the HC-12 buffer doesn't overflow
                                            }
                                        }
                                     } else {
                                         Serial.printf("    > Sending KILL to Outlet 0x%02X\n", targetId);
-                                        outletManager.setRelays(targetId, false, false);
+                                        outletManager.selectDevice(targetId);
+                                        outletManager.relayOff(SOCKET_A);
+                                        outletManager.relayOff(SOCKET_B);
                                     }
                                 }
                                 else if (cmdType == "CMD_ADD_DEVICE") {
