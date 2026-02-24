@@ -1,7 +1,7 @@
 # Central Control Unit (CCU) Firmware — Developer Documentation
 
 **MCU:** ESP32 · **Framework:** Arduino · **IDE:** Arduino IDE / PlatformIO  
-**Firmware:** v3.0.0 · **Communication:** HC-12 433MHz RF + WiFi
+**Firmware:** v4.0.0 · **Communication:** HC-12 433MHz RF + WiFi
 
 ---
 
@@ -55,6 +55,7 @@
 | 2    | Status LED       | Output    | Built-in LED on most ESP32 boards |
 | 16   | HC-12 RX         | Input     | UART2 RX ← HC-12 TX           |
 | 17   | HC-12 TX         | Output    | UART2 TX → HC-12 RX           |
+| 34   | SCT013 ADC       | Input     | Breaker CT sensor (ADC-only)   |
 
 ---
 
@@ -124,6 +125,7 @@ The loop runs the active mode's subsystems:
 ### LOCAL_DASHBOARD Mode
 - `dashboard.handleClient()` — serves web dashboard
 - `outletManager.update()` — reads/parses HC-12 packets
+- `breakerMonitor.update()` — non-blocking SCT013 current sampling
 - `serialCLI.update()` — reads serial CLI input
 
 ### RUNNING Mode
@@ -274,6 +276,9 @@ Served on port 80, accessible via:
 | POST   | `/api/master`         | Set global Master ID     | value (hex)              |
 | GET    | `/api/status`         | Get device state + current| index                   |
 | POST   | `/api/sensors`        | Trigger sensor read      | index                    |
+| GET    | `/api/breaker`        | Get breaker reading      | —                        |
+| POST   | `/api/breaker/threshold`| Set breaker threshold  | value (mA)               |
+| POST   | `/api/breaker/cut`    | Cut device (A+B) or all  | index (int or `all`)     |
 
 ---
 
@@ -463,10 +468,28 @@ When in RUNNING mode, the CCU periodically sends data to the configured server:
 
 | Method | Description |
 |:-------|:------------|
-| `Dashboard(OutletManager&, ConfigStorage&)` | Constructor — takes references to manager and config. |
+| `Dashboard(OutletManager&, ConfigStorage&, BreakerMonitor&)` | Constructor — takes references to manager, config, and breaker monitor. |
 | `void begin()` | Start WebServer on port 80, register all routes. |
 | `void stop()` | Stop the web server. |
 | `void handleClient()` | Handle incoming HTTP requests. **Call in loop().** |
+
+---
+
+### BreakerMonitor — SCT013 Main Load Monitor
+
+| Method | Description |
+|:-------|:------------|
+| `BreakerMonitor()` | Constructor — creates SCT013 sensor on `BREAKER_ADC_PIN`. |
+| `void begin()` | Initialize SCT013 with CT ratio and burden resistor from Config.h. |
+| `bool update()` | Non-blocking sample. Returns `true` when a new RMS reading is ready. **Call in loop().** |
+| `double getAmps() const` | Get last RMS current in Amps. |
+| `int getMilliAmps() const` | Get last RMS current in milliAmps. |
+| `bool hasReading() const` | True if at least one reading has completed. |
+| `void tare()` | Zero-offset calibration (call with no load). |
+| `bool isTareComplete() const` | Check if tare calibration has finished. |
+| `int getThreshold() const` | Get overload threshold in mA. |
+| `void setThreshold(int mA)` | Set overload threshold in mA. |
+| `bool isOverload() const` | True if current ≥ threshold. |
 
 ---
 
@@ -566,6 +589,9 @@ Central_Control_Unit_Firmware/
     │   ├── Dashboard.h / .cpp           — Web dashboard (HTML + REST API)
     │   ├── SerialCLI.h / .cpp           — Debug serial CLI
     │   └── StatusLED.h / .cpp           — Non-blocking LED patterns
+    ├── BreakerMonitor/
+    │   ├── SCT013.h / .cpp              — SCT013 sensor library (mirrored)
+    │   ├── BreakerMonitor.h / .cpp      — Main breaker wrapper (threshold, tare)
     ├── SetupPage/
     │   ├── CaptivePortal.h / .cpp       — DNS redirect + setup web form
     │   └── ConfigStorage.h / .cpp       — NVS persistent credential storage

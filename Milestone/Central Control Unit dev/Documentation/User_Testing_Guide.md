@@ -1,6 +1,6 @@
 # User Testing Guide — Smart Outlet Local Dashboard
 
-**Firmware:** v3.0.0
+**Firmware:** v4.0.0
 
 ## Overview
 
@@ -70,7 +70,33 @@ When a device row is **expanded**, the dashboard automatically polls the PIC eve
 
 ---
 
-## 5. Setting Overload Threshold
+## 5. Main Breaker Monitoring
+
+The **Main Breaker** card sits at the top of the dashboard. It reads total load current from the SCT013 sensor connected to GPIO 34.
+
+### Viewing Current
+- The collapsed card shows a live **Amps** reading (updates every 3 seconds).
+- Color indicates load relative to threshold:
+  - 🟢 **Green** — below 80% of threshold
+  - 🟡 **Yellow** — 80–100% of threshold
+  - 🔴 **Red** — at or above threshold (overload)
+
+### Expanded View
+Tap the breaker card to expand it. You'll see:
+
+1. **Threshold** input — enter a value in mA (e.g., `15000` for 15A) and tap **Set**.
+2. **⛔ Cut All Power** — sends `CMD_RELAY_OFF` (Socket A + B) to **every** registered device.
+3. **Per-device list** — shows each device's combined current (A+B) with an individual **Cut** button.
+
+> [!IMPORTANT]
+> "Cut" always kills **both sockets** (A+B) on the target device. For per-socket control, use the toggle switches in the DEVICES section below.
+
+> [!TIP]
+> When expanded, the breaker card polls every 1.5 seconds and also fetches per-device current breakdown.
+
+---
+
+## 6. Setting Overload Threshold (Per Device)
 
 1. Expand a device row.
 2. In the **Threshold** field, enter a value in mA (e.g., `3000` for 3A).
@@ -79,7 +105,7 @@ When a device row is **expanded**, the dashboard automatically polls the PIC eve
 
 ---
 
-## 6. Changing the Master ID
+## 7. Changing the Master ID
 
 The Master ID identifies the ESP32 as the controller. All devices must recognize this ID to accept commands.
 
@@ -96,7 +122,7 @@ The Master ID identifies the ESP32 as the controller. All devices must recognize
 
 ---
 
-## 7. Changing a Device ID
+## 8. Changing a Device ID
 
 1. Tap the **⋮** menu on a device row.
 2. Select **"Change Device ID"**.
@@ -115,7 +141,7 @@ The Master ID identifies the ESP32 as the controller. All devices must recognize
 
 ---
 
-## 8. Renaming a Device
+## 9. Renaming a Device
 
 1. Tap the **⋮** menu on a device row.
 2. Select **"Rename"**.
@@ -125,7 +151,7 @@ This only changes the label on the dashboard. It does **not** affect the PIC.
 
 ---
 
-## 9. Deleting a Device
+## 10. Deleting a Device
 
 1. Tap the **⋮** menu on a device row.
 2. Select **"Delete"** (shown in red).
@@ -136,7 +162,7 @@ This only changes the label on the dashboard. It does **not** affect the PIC.
 
 ---
 
-## 10. WiFi Settings
+## 11. WiFi Settings
 
 1. Tap **"⚙ WiFi Settings"** at the bottom of the dashboard.
 2. Enter your WiFi **SSID**, **Password**, and optionally a **Server URL**.
@@ -153,12 +179,17 @@ This only changes the label on the dashboard. It does **not** affect the PIC.
 | 2 | Toggle Socket A ON | Expand device, toggle A ON | Label: ON (green), PIC relay clicks |
 | 3 | Toggle Socket B ON | Toggle B ON | Label: ON (green), PIC relay clicks |
 | 4 | Current reading | Wait 2-4 seconds | Both sockets show mA values |
-| 5 | Set threshold | Enter 3000, tap Set | Toast: "Threshold: 3000 mA" |
-| 6 | Rename device | ⋮ → Rename → new name → Save | Name updates in list |
-| 7 | Change Device ID | Put PIC in config mode → ⋮ → Change ID → AF → Send | Toast: "Device ID changed successfully" |
-| 8 | Change Master ID | Put PIC in config mode → Enter 0A → Set | Toast: "Master ID set on all X device(s)" |
-| 9 | Delete device | ⋮ → Delete | Device removed from list |
-| 10 | WiFi Settings | Tap ⚙, enter credentials, Save | ESP32 restarts and connects |
+| 5 | Breaker reading | Check Main Breaker card | Live Amps displayed in green |
+| 6 | Breaker expanded | Tap Main Breaker card | Threshold input, Cut All, device list with Cut buttons |
+| 7 | Cut single device | Expand breaker → Cut on a device | Confirm → both relays turn OFF |
+| 8 | Cut All Power | Expand breaker → Cut All Power | Confirm → all devices turn OFF |
+| 9 | Breaker threshold | Enter 15000, tap Set | Toast: "Breaker threshold: 15000 mA" |
+| 10 | Set device threshold | Enter 3000, tap Set | Toast: "Threshold: 3000 mA" |
+| 11 | Rename device | ⋮ → Rename → new name → Save | Name updates in list |
+| 12 | Change Device ID | Put PIC in config mode → ⋮ → Change ID → AF → Send | Toast: "Device ID changed successfully" |
+| 13 | Change Master ID | Put PIC in config mode → Enter 0A → Set | Toast: "Master ID set on all X device(s)" |
+| 14 | Delete device | ⋮ → Delete | Device removed from list |
+| 15 | WiFi Settings | Tap ⚙, enter credentials, Save | ESP32 restarts and connects |
 
 ---
 
@@ -167,6 +198,9 @@ This only changes the label on the dashboard. It does **not** affect the PIC.
 | Problem | Cause | Solution |
 |:--------|:------|:---------|
 | Current shows `-- mA` | No poll response yet | Wait 2-4 seconds for auto-poll |
+| Breaker shows `-- A` | SCT013 not connected or no reading yet | Check wiring to GPIO 34, wait 3 seconds |
+| Breaker always green | Load well below threshold | Lower threshold to test color change |
+| Cut All doesn't work | No devices added | Add devices first |
 | Relay toggle doesn't stick | PIC didn't ACK | Check HC-12 wiring, distance, power |
 | Device ID change fails | PIC not in config mode | Hold RB3 for **3 seconds** before changing |
 | Master ID partial success | One PIC not responding | Retry, check PIC power/connection |

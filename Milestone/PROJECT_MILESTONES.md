@@ -1,6 +1,6 @@
 # 🔌 Smart Outlet System — Project Milestones
 
-**Last Updated:** February 23, 2026
+**Last Updated:** February 24, 2026
 
 ---
 
@@ -15,9 +15,9 @@
 | Component                | Version | Status         | Documentation                                                                 |
 |:-------------------------|:--------|:---------------|:------------------------------------------------------------------------------|
 | SmartOutlet Firmware     | v5.3.1  | ✅ Stable      | [FIRMWARE_DOCS.md](Smart%20Outlet%20Device%20dev/Documentation/FIRMWARE_DOCS.md) |
-| CCU Firmware (ESP32)     | v3.0.0  | ✅ Stable      | [FIRMWARE_DOCS.md](Central%20Control%20Unit%20dev/Documentation/FIRMWARE_DOCS.md) |
+| CCU Firmware (ESP32)     | v4.0.0  | ✅ Stable      | [FIRMWARE_DOCS.md](Central%20Control%20Unit%20dev/Documentation/FIRMWARE_DOCS.md) |
 | Smart-Outlet-WebApp      | —       | 🔧 In Progress | —                                                                             |
-| Outlet Breaker (SCT013)  | —       | 📋 Planned     | —                                                                             |
+| Outlet Breaker (SCT013)  | v4.0.0  | 🔧 In Progress | [FIRMWARE_DOCS.md](Central%20Control%20Unit%20dev/Documentation/FIRMWARE_DOCS.md) |
 
 ---
 
@@ -27,6 +27,7 @@
 
 | Date       | Version | Milestone                                                                 |
 |:-----------|:--------|:--------------------------------------------------------------------------|
+| 2026-02-24 | v4.0.0  | Main breaker monitoring — SCT013 integration, dashboard UI, cut-all/per-device |
 | 2026-02-23 | v3.0.0  | Added developer documentation and user testing guide                      |
 | 2026-02-23 | v2.x    | Bug fixes — current routing by socket ID, Device ID ACK detection         |
 | 2026-02-10 | v2.0.0  | Dashboard UI overhaul — device list, toggle switches, auto-poll, REST API |
@@ -49,7 +50,8 @@
 
 ## Roadmap
 
-- [ ] Outlet Breaker — SCT013-100A main load monitoring via ESP32
+- [x] Outlet Breaker — SCT013-100A main load monitoring via ESP32
+- [ ] Auto cut-off — automatically kill all outlets when breaker threshold exceeded
 - [ ] WebApp full cloud integration — ESP32 ↔ Django server data sync
 - [ ] Online Dashboard — CRUD for outlets, threshold config, AI chat panel
 - [ ] Persistent device storage on ESP32 (SPIFFS/NVS instead of RAM)
