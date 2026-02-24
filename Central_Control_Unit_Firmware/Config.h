@@ -55,7 +55,7 @@
 #define SERIAL_BAUD      115200
 
 // ─── Cloud / Server ─────────────────────────────────────────
-#define CLOUD_SEND_INTERVAL_MS  10000     // How often to send data to server
+#define CLOUD_SEND_INTERVAL_MS  2000      // How often to send data to server
 #define HTTP_TIMEOUT_MS         5000      // HTTP request timeout
 
 #endif // CONFIG_H

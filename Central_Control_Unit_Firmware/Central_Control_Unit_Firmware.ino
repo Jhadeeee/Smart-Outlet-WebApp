@@ -270,15 +270,114 @@ void loop() {
                 }
             }
 
-            // Periodic data sending (placeholder)
+            // Periodic cloud data sync & command fetch
             if (millis() - lastCloudSend >= CLOUD_SEND_INTERVAL_MS) {
                 lastCloudSend = millis();
+                bool anyFail = false;
 
-                // Example JSON payload — customize for your sensors
-                String payload = "{\"device\":\"CCU\",\"uptime\":" + String(millis() / 1000) + "}";
-                int responseCode = cloud.sendData(payload);
+                // 1. Send Sensor Data for each Outlet
+                for (uint8_t i = 0; i < outletManager.getDeviceCount(); i++) {
+                    OutletDevice& dev = outletManager.getDevice(i);
+                    String payload = "{\"device_id\":\"";
+                    if (dev.getDeviceId() < 0x10) payload += "0";
+                    payload += String(dev.getDeviceId(), HEX) + "\",";
+                    payload.toUpperCase(); // Ensure hex is uppercase
+                    
+                    payload += "\"current_a\":" + String(dev.getCurrentA()) + ",";
+                    payload += "\"current_b\":" + String(dev.getCurrentB()) + ",";
+                    payload += "\"relay_a\":" + String(dev.getRelayA() ? "true" : "false") + ",";
+                    payload += "\"relay_b\":" + String(dev.getRelayB() ? "true" : "false") + ",";
+                    payload += "\"is_overload\":false}";
+                    
+                    int res = cloud.sendSensorData(payload);
+                    if (res != 200 && res != 201) anyFail = true;
+                }
 
-                if (responseCode == 200) {
+                // 2. Send Breaker Data
+                if (breakerMonitor.hasReading()) {
+                    String breakerPayload = "{\"ccu_id\":\"";
+                    if (outletManager.getSenderID() < 0x10) breakerPayload += "0";
+                    breakerPayload += String(outletManager.getSenderID(), HEX) + "\",";
+                    breakerPayload.toUpperCase();
+                    
+                    breakerPayload += "\"current_ma\":" + String(breakerMonitor.getMilliAmps()) + "}";
+                    
+                    int res = cloud.sendBreakerData(breakerPayload);
+                    if (res != 200 && res != 201) anyFail = true;
+                }
+
+                // 3. Fetch and Execute Commands
+                for (uint8_t i = 0; i < outletManager.getDeviceCount(); i++) {
+                    OutletDevice& dev = outletManager.getDevice(i);
+                    String devIdStr = "";
+                    if (dev.getDeviceId() < 0x10) devIdStr += "0";
+                    devIdStr += String(dev.getDeviceId(), HEX);
+                    devIdStr.toUpperCase();
+                    
+                    String jsonCommands = cloud.fetchCommands(devIdStr);
+                    
+                    if (jsonCommands.indexOf("\"success\": true") >= 0 || jsonCommands.indexOf("\"success\":true") >= 0) {
+                        int startIdx = 0;
+                        while (true) {
+                            startIdx = jsonCommands.indexOf("{\"command\":", startIdx);
+                            if (startIdx < 0) break;
+                            int endIdx = jsonCommands.indexOf("}", startIdx);
+                            if (endIdx < 0) break;
+                            
+                            String cmdObj = jsonCommands.substring(startIdx, endIdx);
+                            
+                            // Extract command
+                            String cmd = "";
+                            int cmdStart = cmdObj.indexOf("\"command\": \"");
+                            if (cmdStart >= 0) {
+                                cmdStart += 12;
+                                int cmdEnd = cmdObj.indexOf("\"", cmdStart);
+                                if (cmdEnd >= 0) cmd = cmdObj.substring(cmdStart, cmdEnd);
+                            }
+                            
+                            // Extract socket
+                            String socketStr = "";
+                            int sockStart = cmdObj.indexOf("\"socket\": \"");
+                            if (sockStart >= 0) {
+                                sockStart += 11;
+                                int sockEnd = cmdObj.indexOf("\"", sockStart);
+                                if (sockEnd >= 0) socketStr = cmdObj.substring(sockStart, sockEnd);
+                            }
+                            
+                            // Extract value
+                            int value = 0;
+                            int valStart = cmdObj.indexOf("\"value\":");
+                            if (valStart >= 0) {
+                                valStart += 8;
+                                int valEnd = cmdObj.indexOf(",", valStart);
+                                if (valEnd < 0) valEnd = cmdObj.length(); 
+                                String valStr = cmdObj.substring(valStart, valEnd);
+                                valStr.trim();
+                                if (valStr != "null") value = valStr.toInt();
+                            }
+                            
+                            // Execute physical command via HC-12
+                            outletManager.selectDevice(dev.getDeviceId());
+                            if (cmd == "relay_on") {
+                                outletManager.relayOn(socketStr == "a" ? SOCKET_A : SOCKET_B);
+                                delay(100);
+                            } else if (cmd == "relay_off") {
+                                outletManager.relayOff(socketStr == "a" ? SOCKET_A : SOCKET_B);
+                                delay(100);
+                            } else if (cmd == "set_threshold" && value > 0) {
+                                outletManager.setThreshold(value);
+                                delay(100);
+                            }
+                            
+                            startIdx = endIdx + 1;
+                        }
+                    } else if (jsonCommands.length() > 0) {
+                         anyFail = true;
+                    }
+                }
+
+                // Connection monitoring logic
+                if (!anyFail) {
                     if (cloudFailCount > 0) {
                         Serial.println("✓ Cloud connection restored.");
                     }
@@ -287,11 +386,9 @@ void loop() {
                 } else {
                     cloudFailCount++;
                     if (cloudFailCount == 1) {
-                        // Only log the first failure
-                        Serial.println("✗ Cloud unreachable. Retrying silently...");
+                        Serial.println("✗ Cloud communication issue. Retrying silently...");
                     } else if (cloudFailCount % 6 == 0) {
-                        // Reminder every ~60 seconds
-                        Serial.println("✗ Cloud still unreachable (" + String(cloudFailCount) + " attempts).");
+                        Serial.println("✗ Cloud communication issue (" + String(cloudFailCount) + " attempts).");
                     }
                     statusLED.setPattern(LEDPattern::SOLID);
                 }

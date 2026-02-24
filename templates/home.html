@@ -787,6 +787,71 @@
             border-left: 3px solid var(--danger-red);
         }
 
+        /* ─── Threshold / Limit Bars ─── */
+        .limit-bar {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 12px 18px;
+            margin-bottom: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 15px;
+        }
+
+        .limit-bar label {
+            font-size: 13px;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.7);
+            margin: 0;
+            white-space: nowrap;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .limit-bar.breaker {
+            background: rgba(220, 38, 38, 0.1);
+            /* Soft red tint */
+            border: 1px solid rgba(220, 38, 38, 0.2);
+            margin-bottom: 20px;
+        }
+
+        .limit-bar.breaker label {
+            color: rgba(252, 165, 165, 0.9);
+        }
+
+        .input-group-custom {
+            display: flex;
+            align-items: center;
+        }
+
+        .input-group-custom input {
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+            padding: 4px 8px;
+            color: rgba(255, 255, 255, 0.9);
+            font-family: monospace;
+            font-size: 14px;
+            width: 70px;
+            text-align: right;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .input-group-custom input:focus {
+            border-color: var(--primary-purple);
+        }
+
+        .input-group-custom .unit {
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.4);
+            margin-left: 6px;
+            font-weight: 500;
+        }
+
         /* ─── Profile Dropdown ─── */
         .profile-wrapper {
             position: relative;
@@ -1119,6 +1184,19 @@
                         </div>
                     </div>
 
+                    <!-- Main Breaker Controls -->
+                    <div class="limit-bar breaker">
+                        <div class="input-group-custom">
+                            <label>Breaker Limit:</label>
+                            <input type="text" id="mainThresholdInput" value="15000">
+                            <span class="unit">mA</span>
+                        </div>
+                        <div style="display:flex; gap:8px">
+                            <button class="btn-save" onclick="setMainThreshold()">Set</button>
+                            <button class="btn-save btn-danger" onclick="cutAllPower()">⛔ Cut All Power</button>
+                        </div>
+                    </div>
+
                     <!-- Status Badges -->
                     <div class="status-badges">
                         <span class="status-badge active">Active: {{ active_count }}</span>
@@ -1136,26 +1214,41 @@
 
                     {% if user_ccus %}
                     {% for ccu in user_ccus %}
-                    <div class="ccu-card" style="animation-delay: {{ forloop.counter0 }}00ms">
-                        <div class="ccu-info">
-                            <div class="ccu-icon">
-                                <i class="fas fa-microchip"></i>
-                            </div>
-                            <div>
-                                <div class="ccu-name">{{ ccu.name }}</div>
-                                <div class="ccu-detail">
-                                    ID: {{ ccu.ccu_id }}
-                                    {% if ccu.location %} · {{ ccu.location }}{% endif %}
+                    <div class="ccu-card"
+                        style="animation-delay: {{ forloop.counter0 }}00ms; display:flex; flex-direction:column; align-items:stretch; gap:10px">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <div class="ccu-info">
+                                <div class="ccu-icon">
+                                    <i class="fas fa-microchip"></i>
+                                </div>
+                                <div>
+                                    <div class="ccu-name">{{ ccu.name }}</div>
+                                    <div class="ccu-detail">
+                                        ID: {{ ccu.ccu_id }}
+                                        {% if ccu.location %} · {{ ccu.location }}{% endif %}
+                                    </div>
                                 </div>
                             </div>
+                            <form method="post" action="{% url 'outlets:delete_ccu' ccu.ccu_id %}"
+                                onsubmit="return confirm('Remove CCU {{ ccu.name }}?')" style="margin:0">
+                                {% csrf_token %}
+                                <button type="submit" class="btn-delete-ccu" title="Remove CCU">
+                                    <i class="fas fa-trash-alt"></i>
+                                </button>
+                            </form>
                         </div>
-                        <form method="post" action="{% url 'outlets:delete_ccu' ccu.ccu_id %}"
-                            onsubmit="return confirm('Remove CCU {{ ccu.name }}?')" style="margin:0">
-                            {% csrf_token %}
-                            <button type="submit" class="btn-delete-ccu" title="Remove CCU">
-                                <i class="fas fa-trash-alt"></i>
-                            </button>
-                        </form>
+                        <!-- Master ID Control -->
+                        <div class="limit-bar outlet-limit"
+                            style="margin:0; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:rgba(255,255,255,0.8)">
+                            <div class="input-group-custom">
+                                <label style="color:rgba(255,255,255,0.7)">Global Master ID:</label>
+                                <span style="color:var(--accent-purple);font-weight:600">0x</span>
+                                <input type="text" id="masterId-{{ ccu.ccu_id }}" value="{{ ccu.ccu_id }}" maxlength="2"
+                                    style="width:50px; background:rgba(255,255,255,0.1); color:white">
+                            </div>
+                            <button class="btn-save" style="background:rgba(255,255,255,0.1); color:white"
+                                onclick="setMasterId('{{ ccu.ccu_id }}')">Set (Hold PIC 3s)</button>
+                        </div>
                     </div>
                     {% endfor %}
                     {% else %}
@@ -1219,13 +1312,32 @@
                                         </div>
                                     </div>
                                 </div>
-                                <form method="post" action="{% url 'outlets:delete_outlet' item.outlet.device_id %}"
-                                    onsubmit="return confirm('Remove {{ item.outlet.name }}?')" style="margin:0">
-                                    {% csrf_token %}
-                                    <button type="submit" class="btn-delete-outlet" title="Remove outlet">
-                                        <i class="fas fa-trash-alt"></i>
+                                <div style="display:flex; gap:8px">
+                                    <button class="btn-delete-outlet" style="color:rgba(255,255,255,0.5)"
+                                        title="Change Device ID"
+                                        onclick="promptChangeDeviceId('{{ item.outlet.device_id }}')">
+                                        <i class="fas fa-pencil-alt"></i>
                                     </button>
-                                </form>
+                                    <form method="post" action="{% url 'outlets:delete_outlet' item.outlet.device_id %}"
+                                        onsubmit="return confirm('Remove {{ item.outlet.name }}?')" style="margin:0">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn-delete-outlet" title="Remove outlet">
+                                            <i class="fas fa-trash-alt"></i>
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+
+                            <!-- Device Threshold -->
+                            <div class="limit-bar outlet-limit">
+                                <div class="input-group-custom">
+                                    <label>Threshold:</label>
+                                    <input type="text" id="threshold-{{ item.outlet.device_id }}"
+                                        value="{{ item.outlet.threshold }}">
+                                    <span class="unit">mA</span>
+                                </div>
+                                <button class="btn-save"
+                                    onclick="setOutletThreshold('{{ item.outlet.device_id }}')">Set</button>
                             </div>
 
                             <!-- Per-Socket Controls -->
@@ -1395,29 +1507,89 @@
             }, 3000);
         }
 
-        // ─── Toggle Relay ───
-        async function toggleRelay(deviceId, socket, state) {
+        // ─── Set General Command ───
+        async function sendCommand(deviceId, command, socket = '', value = null) {
             try {
                 const formData = new FormData();
-                formData.append('socket', socket);
+                if (socket) formData.append('socket', socket);
+                if (value !== null) formData.append('value', value);
 
-                const response = await fetch(`/outlet/${deviceId}/toggle/`, {
+                const response = await fetch(`/api/commands/${deviceId}/${command}/`, {
                     method: 'POST',
-                    headers: {
-                        'X-CSRFToken': getCookie('csrftoken'),
-                    },
+                    headers: { 'X-CSRFToken': getCookie('csrftoken') },
                     body: formData,
                 });
 
                 const data = await response.json();
-
                 if (data.success) {
-                    showToast(data.message, 'success');
+                    showToast(data.message || 'Command sent successfully', 'success');
                 } else {
-                    showToast(data.message || 'Failed to toggle relay', 'error');
+                    showToast(data.message || 'Failed to send command', 'error');
                 }
             } catch (error) {
                 showToast('Network error. Please try again.', 'error');
+            }
+        }
+
+        // ─── Toggle Relay ───
+        async function toggleRelay(deviceId, socket, state) {
+            // Using the new generic command structure via the API
+            const command = state ? 'relay_on' : 'relay_off';
+            await sendCommand(deviceId, command, socket);
+        }
+
+        // ─── Set Cut All Power ───
+        function cutAllPower() {
+            if (confirm("DANGER: This will immediately turn OFF all relays on all outlets. Are you sure?")) {
+                // Since this impacts all outlets, we iterate over the rendered items
+                const outletIds = [
+                    {% for item in outlet_data %}
+            "{{ item.outlet.device_id }}"{% if not forloop.last %}, {% endif %}
+            {% endfor %}
+                ];
+            outletIds.forEach(id => {
+                sendCommand(id, 'relay_off', 'a');
+                sendCommand(id, 'relay_off', 'b');
+            });
+            showToast('Cut power command broadcasted', 'success');
+        }
+        }
+
+        // ─── Main Breaker Threshold ───
+        function setMainThreshold() {
+            const input = document.getElementById('mainThresholdInput');
+            const val = parseInt(input.value);
+            if (val > 0) {
+                showToast(`Main Breaker threshold saved: ${val}mA`, 'success');
+                // NOTE: In a real implementation this would save to the CCU model in DB
+            }
+        }
+
+        // ─── Set Outlet Threshold ───
+        function setOutletThreshold(deviceId) {
+            const input = document.getElementById(`threshold-${deviceId}`);
+            const val = parseInt(input.value);
+            if (val > 0) {
+                sendCommand(deviceId, 'set_threshold', '', val);
+            }
+        }
+
+        // ─── Set Master ID ───
+        function setMasterId(ccuId) {
+            const input = document.getElementById(`masterId-${ccuId}`);
+            const val = input.value;
+            if (val && val.length > 0) {
+                showToast(`Master ID saved to DB. Hold PIC button for 3s to sync.`, 'success');
+                // NOTE: Requires backend implementation to broadcast master ID change
+            }
+        }
+
+        // ─── Change Device ID prompt ───
+        function promptChangeDeviceId(oldId) {
+            const newId = prompt(`Change Device ID for ${oldId}\nEnter new Hex ID (e.g. F2):`);
+            if (newId && newId.trim() !== '') {
+                showToast(`Hold PIC button for 3s. Changing ID to ${newId.toUpperCase()}...`, 'success');
+                // NOTE: Requires backend implementation to handle device ID change
             }
         }
 

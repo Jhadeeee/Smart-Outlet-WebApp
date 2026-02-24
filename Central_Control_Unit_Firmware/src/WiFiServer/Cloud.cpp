@@ -22,32 +22,73 @@ void Cloud::begin(const String& serverUrl) {
     Serial.println("[Cloud] Initialized with server: " + _serverUrl);
 }
 
-int Cloud::sendData(const String& jsonPayload) {
-    if (_serverUrl.length() == 0) {
-        return -1;
-    }
-
-    if (WiFi.status() != WL_CONNECTED) {
+int Cloud::sendSensorData(const String& jsonPayload) {
+    if (_serverUrl.length() == 0 || WiFi.status() != WL_CONNECTED) {
         return -1;
     }
 
     HTTPClient http;
-    String endpoint = _serverUrl + "/api/data";  // Customize this endpoint
-
+    String endpoint = _serverUrl + "/api/data/";
+    
     http.begin(endpoint);
     http.addHeader("Content-Type", "application/json");
     http.setTimeout(HTTP_TIMEOUT_MS);
 
     _lastResponseCode = http.POST(jsonPayload);
-
     if (_lastResponseCode > 0) {
         _lastResponse = http.getString();
     } else {
         _lastResponse = http.errorToString(_lastResponseCode);
     }
-
     http.end();
     return _lastResponseCode;
+}
+
+int Cloud::sendBreakerData(const String& jsonPayload) {
+    if (_serverUrl.length() == 0 || WiFi.status() != WL_CONNECTED) {
+        return -1;
+    }
+
+    HTTPClient http;
+    String endpoint = _serverUrl + "/api/breaker-data/";
+    
+    http.begin(endpoint);
+    http.addHeader("Content-Type", "application/json");
+    http.setTimeout(HTTP_TIMEOUT_MS);
+
+    _lastResponseCode = http.POST(jsonPayload);
+    if (_lastResponseCode > 0) {
+        _lastResponse = http.getString();
+    } else {
+        _lastResponse = http.errorToString(_lastResponseCode);
+    }
+    http.end();
+    return _lastResponseCode;
+}
+
+String Cloud::fetchCommands(const String& deviceId) {
+    if (_serverUrl.length() == 0 || WiFi.status() != WL_CONNECTED) {
+        return "";
+    }
+
+    HTTPClient http;
+    String endpoint = _serverUrl + "/api/commands/" + deviceId + "/";
+    
+    http.begin(endpoint);
+    http.setTimeout(HTTP_TIMEOUT_MS);
+
+    _lastResponseCode = http.GET();
+    String responseBody = "";
+    
+    if (_lastResponseCode == 200) {
+        responseBody = http.getString();
+    } else if (_lastResponseCode > 0) {
+        _lastResponse = http.getString(); // Store error response
+    } else {
+        _lastResponse = http.errorToString(_lastResponseCode);
+    }
+    http.end();
+    return responseBody;
 }
 
 bool Cloud::isReachable() {
