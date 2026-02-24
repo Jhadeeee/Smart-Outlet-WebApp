@@ -114,10 +114,23 @@ class Alert(models.Model):
 
 class PendingCommand(models.Model):
     """
-    Queue for commands destined for the ESP32.
-    Since the ESP32 wakes up every 10s to POST telemetry, the server
-    cannot push data down directly. We enqueue it here, and the server
-    returns the oldest pending command in its HTTP response to the POST.
+    Original Queue for commands (Shared table - DO NOT DELETE)
+    """
+    created_at = models.DateTimeField(auto_now_add=True)
+    command_type = models.CharField(max_length=50, help_text="e.g., ADD_DEVICE, SET_MASTER_ID, CUT_POWER")
+    target_id = models.CharField(max_length=50, null=True, blank=True, help_text="e.g., 0xFE, NULL for broadcast")
+    payload = models.JSONField(help_text="Any extra command parameters")
+    is_delivered = models.BooleanField(default=False)
+    delivered_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['created_at']
+        managed = False
+        db_table = 'outlets_pendingcommand'
+
+class CCUCommandQueue(models.Model):
+    """
+    Isolated Queue for ESP32 commands (Our dedicated table)
     """
     created_at = models.DateTimeField(auto_now_add=True)
     command_type = models.CharField(max_length=50, help_text="e.g., ADD_DEVICE, SET_MASTER_ID, CUT_POWER")
@@ -130,6 +143,32 @@ class PendingCommand(models.Model):
 
     class Meta:
         ordering = ['created_at']
+        db_table = 'ccu_command_queue'
+
+class SmartOutletDevice(models.Model):
+    """
+    Persistent record of a paired Smart Outlet.
+    Ensures devices appear on the dashboard even when no telemetry is actively streaming.
+    """
+    device_id = models.CharField(max_length=10, unique=True, help_text="Hex ID e.g., 0xFE")
+    name = models.CharField(max_length=100, default="Smart Outlet")
+    limit_mA = models.IntegerField(default=5000)
+    
+    # Cache the latest telemetry state so the card doesn't show 0mA when it first boots
+    last_socket_a_state = models.BooleanField(default=False)
+    last_socket_a_mA = models.IntegerField(default=0)
+    last_socket_b_state = models.BooleanField(default=False)
+    last_socket_b_mA = models.IntegerField(default=0)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_seen = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'outlets_smartoutletdevice'
+        ordering = ['device_id']
+
+    def __str__(self):
+        return f"{self.name} ({self.device_id})"
 
 class TestTelemetryLog(models.Model):
     """

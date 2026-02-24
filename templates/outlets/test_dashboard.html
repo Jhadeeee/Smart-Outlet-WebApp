@@ -142,6 +142,7 @@
 
                     <!-- Device Summary List (Inside Main Breaker) -->
                     {% for dev in active_devices %}
+                    {% if dev.device_id != 'NONE' %}
                     <div class="p-4 px-6 bg-slate-50/50 border-t border-slate-100">
                         <div class="flex items-center justify-between py-1">
                             <div class="flex items-center gap-3">
@@ -149,13 +150,15 @@
                                 <span class="font-mono text-xs text-slate-400">0x{{ dev.device_id }}</span>
                             </div>
                             <div class="flex items-center gap-4">
-                                <span class="font-mono font-semibold text-sm text-slate-800">A: {{ dev.socket_a_mA }}mA
-                                    | B: {{ dev.socket_b_mA }}mA</span>
-                                <button
+                                <span class="font-mono font-semibold text-sm text-slate-800">A: {{ dev.last_socket_a_mA
+                                    }}mA
+                                    | B: {{ dev.last_socket_b_mA }}mA</span>
+                                <button onclick="sendCommand('CMD_CUT_POWER', '0x{{ dev.device_id }}', {})"
                                     class="px-3 py-1 bg-red-50 text-red-600 border border-red-200 hover:bg-red-600 hover:text-white text-xs font-bold rounded transition-colors">Cut</button>
                             </div>
                         </div>
                     </div>
+                    {% endif %}
                     {% empty %}
                     <div
                         class="p-4 px-6 bg-slate-50/50 border-t border-slate-100 text-center text-slate-400 text-sm italic">
@@ -192,6 +195,7 @@
 
             <!-- Dynamic outlets generated from active_devices -->
             {% for dev in active_devices %}
+            {% if dev.device_id != 'NONE' %}
             <div class="border-b border-slate-100 last:border-0">
                 <div class="px-4 py-3 flex justify-between items-center cursor-pointer hover:bg-slate-50 transition-colors"
                     onclick="toggleAccordion('device{{ dev.device_id }}', 'icon{{ dev.device_id }}')">
@@ -202,7 +206,7 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7">
                             </path>
                         </svg>
-                        <span class="font-semibold text-sm text-slate-800">Smart Outlet</span>
+                        <span class="font-semibold text-sm text-slate-800">{{ dev.name }}</span>
                     </div>
                     <div class="flex items-center gap-3">
                         <span class="text-xs font-mono text-slate-400">0x{{ dev.device_id }}</span>
@@ -211,22 +215,40 @@
 
                 <!-- Body -->
                 <div id="device{{ dev.device_id }}" class="p-4 pt-2 space-y-3 transition-all duration-300 ease-in-out">
-                    <div class="flex justify-between items-center mb-2 px-1">
-                        <span class="text-xs text-slate-500 font-medium">Device Limit:</span>
-                        <span class="text-xs text-slate-700 font-mono font-semibold">{{ dev.device_limit_mA }}
-                            mA</span>
+                    <div class="flex flex-col gap-2 mb-3 pb-3 border-b border-slate-100">
+                        <div class="flex justify-between items-center px-1">
+                            <span class="text-xs text-slate-500 font-medium">Device Limit:</span>
+                            <div class="flex items-center gap-2">
+                                <input type="number" id="limitInput{{ dev.device_id }}" placeholder="{{ dev.limit_mA }}"
+                                    class="w-20 text-xs px-2 py-1 border border-slate-200 rounded text-slate-700">
+                                <button onclick="setDeviceLimit('{{ dev.device_id }}')"
+                                    class="px-2 py-1 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 text-[10px] font-bold rounded transition-colors">Set
+                                    mA</button>
+                            </div>
+                        </div>
+                        <div class="flex justify-between items-center px-1">
+                            <span class="text-xs text-slate-500 font-medium">Rename ID:</span>
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs font-mono text-slate-400">0x</span>
+                                <input type="text" id="idInput{{ dev.device_id }}" placeholder="{{ dev.device_id }}"
+                                    class="w-12 text-xs px-2 py-1 border border-slate-200 rounded font-mono text-slate-700">
+                                <button onclick="setDeviceId('{{ dev.device_id }}')"
+                                    class="px-2 py-1 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 text-[10px] font-bold rounded transition-colors">Rename</button>
+                            </div>
+                        </div>
                     </div>
                     <!-- Socket A -->
                     <div class="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100">
                         <div>
                             <div class="font-medium text-sm text-slate-700">Socket A</div>
-                            <div class="text-xs font-mono text-slate-500 font-semibold">{{ dev.socket_a_mA }} mA
+                            <div class="text-xs font-mono text-slate-500 font-semibold">{{ dev.last_socket_a_mA }} mA
                             </div>
                         </div>
                         <button
-                            class="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent {% if dev.socket_a_state %}bg-indigo-600{% else %}bg-slate-200{% endif %} transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:ring-offset-2">
+                            onclick="toggleRelay('{{ dev.device_id }}', 'A', {% if dev.last_socket_a_state %}false{% else %}true{% endif %})"
+                            class="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent {% if dev.last_socket_a_state %}bg-indigo-600{% else %}bg-slate-200{% endif %} transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:ring-offset-2">
                             <span
-                                class="{% if dev.socket_a_state %}translate-x-5{% else %}translate-x-0{% endif %} pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"></span>
+                                class="{% if dev.last_socket_a_state %}translate-x-5{% else %}translate-x-0{% endif %} pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"></span>
                         </button>
                     </div>
 
@@ -234,17 +256,19 @@
                     <div class="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100">
                         <div>
                             <div class="font-medium text-sm text-slate-700">Socket B</div>
-                            <div class="text-xs font-mono text-slate-500 font-semibold">{{ dev.socket_b_mA }} mA
+                            <div class="text-xs font-mono text-slate-500 font-semibold">{{ dev.last_socket_b_mA }} mA
                             </div>
                         </div>
                         <button
-                            class="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent {% if dev.socket_b_state %}bg-indigo-600{% else %}bg-slate-200{% endif %} transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:ring-offset-2">
+                            onclick="toggleRelay('{{ dev.device_id }}', 'B', {% if dev.last_socket_b_state %}false{% else %}true{% endif %})"
+                            class="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent {% if dev.last_socket_b_state %}bg-indigo-600{% else %}bg-slate-200{% endif %} transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:ring-offset-2">
                             <span
-                                class="{% if dev.socket_b_state %}translate-x-5{% else %}translate-x-0{% endif %} pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"></span>
+                                class="{% if dev.last_socket_b_state %}translate-x-5{% else %}translate-x-0{% endif %} pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"></span>
                         </button>
                     </div>
                 </div>
             </div>
+            {% endif %}
             {% empty %}
             <div class="p-8 text-center text-slate-400 italic text-sm">
                 Waiting for devices to connect...
@@ -428,6 +452,7 @@
                     if (data.status === 'success') {
                         // Just visually confirm the click
                         console.log("Command queued:", cmd);
+                        window.location.reload();
                     } else {
                         alert('Error queuing command: ' + data.message);
                     }
@@ -442,8 +467,12 @@
         }
 
         function addDevice() {
-            // Typically prompts the ESP32 to enter "Add Device" pairing mode
-            sendCommand('CMD_ADD_DEVICE', 'ALL', {});
+            const hexId = prompt("Enter Device Hex ID (e.g. F2, FE, 01):", "F2");
+            if (!hexId) return;
+            const devName = prompt("Enter Device Name:", "Smart Outlet");
+            if (!devName) return;
+
+            sendCommand('CMD_ADD_DEVICE', 'ALL', { id: '0x' + hexId, name: devName });
         }
 
         function setMainLimit() {
@@ -451,6 +480,22 @@
             if (!inputVal) return;
             sendCommand('CMD_SET_LIMIT', 'ALL', { limit_mA: parseInt(inputVal) });
             document.getElementById('mainLimitInput').value = ''; // clears the input after sending
+        }
+
+        function toggleRelay(deviceId, socketStr, turnOn) {
+            sendCommand(turnOn ? 'CMD_RELAY_ON' : 'CMD_RELAY_OFF', '0x' + deviceId, { socket: socketStr });
+        }
+
+        function setDeviceLimit(deviceId) {
+            const inputVal = document.getElementById('limitInput' + deviceId).value;
+            if (!inputVal) return;
+            sendCommand('CMD_SET_LIMIT', '0x' + deviceId, { limit_mA: parseInt(inputVal) });
+        }
+
+        function setDeviceId(oldId) {
+            const inputVal = document.getElementById('idInput' + oldId).value;
+            if (!inputVal) return;
+            sendCommand('CMD_SET_DEVICE_ID', '0x' + oldId, { new_id: '0x' + inputVal });
         }
 
         // Modals for Cut Power

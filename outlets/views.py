@@ -7,7 +7,16 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
 import json
-from .models import Outlet, SensorData, UserProfile, TestTelemetryLog, TestEventLog, PendingCommand
+from .models import (
+    Outlet,
+    SensorData,
+    UserProfile,
+    TestTelemetryLog,
+    TestEventLog,
+    CCUCommandQueue,
+    SmartOutletDevice
+)
+from django.utils import timezone
 
 # ============ AUTHENTICATION VIEWS ============
 
@@ -150,17 +159,14 @@ def test_dashboard_view(request):
     Public bypassing dashboard for testing and calibration.
     Displays live telemetry and event logs without requiring login.
     """
-    # Get latest 50 records of each
     telemetry_logs = TestTelemetryLog.objects.all()[:50]
     event_logs = TestEventLog.objects.all()[:50]
     
     # Get the absolute most recent telemetry data to populate the visual controls
     latest_telemetry = TestTelemetryLog.objects.first()
     
-    # Extract all active devices (they will share the most recent timestamp in the payload)
-    active_devices = []
-    if latest_telemetry:
-        active_devices = TestTelemetryLog.objects.filter(timestamp=latest_telemetry.timestamp)
+    # Extract all persistent devices
+    active_devices = SmartOutletDevice.objects.all()
     
     context = {
         'telemetry_logs': telemetry_logs,
@@ -218,23 +224,45 @@ def receive_test_log(request):
             )
         else:
             # Log each device
+            # Log each device
             for dev in devices:
                 socket_a = dev.get('socket_a', {})
                 socket_b = dev.get('socket_b', {})
                 
+                device_id = dev.get('id', '??')
+                limit_mA = dev.get('limit_mA', 5000)
+                a_state = bool(socket_a.get('state', 0))
+                a_mA = socket_a.get('mA', 0)
+                b_state = bool(socket_b.get('state', 0))
+                b_mA = socket_b.get('mA', 0)
+                
+                # 1. Update the persistent SmartOutletDevice record
+                if device_id != "NONE":
+                    obj, created = SmartOutletDevice.objects.update_or_create(
+                        device_id=device_id,
+                        defaults={
+                            'limit_mA': limit_mA,
+                            'last_socket_a_state': a_state,
+                            'last_socket_a_mA': a_mA,
+                            'last_socket_b_state': b_state,
+                            'last_socket_b_mA': b_mA
+                        }
+                    )
+                
+                # 2. Add to the append-only ledger
                 TestTelemetryLog.objects.create(
                     main_breaker_mA=main_mA,
                     main_breaker_limit_mA=main_limit,
-                    device_id=dev.get('id', '??'),
-                    device_limit_mA=dev.get('limit_mA', 5000),
-                    socket_a_state=bool(socket_a.get('state', 0)),
-                    socket_a_mA=socket_a.get('mA', 0),
-                    socket_b_state=bool(socket_b.get('state', 0)),
-                    socket_b_mA=socket_b.get('mA', 0)
+                    device_id=device_id,
+                    device_limit_mA=limit_mA,
+                    socket_a_state=a_state,
+                    socket_a_mA=a_mA,
+                    socket_b_state=b_state,
+                    socket_b_mA=b_mA
                 )
                 
         # Check if there are any pending commands for the ESP32
-        pending = PendingCommand.objects.filter(is_delivered=False).order_by('created_at').first()
+        pending = CCUCommandQueue.objects.filter(is_delivered=False).order_by('created_at').first()
         
         response_data = {
             'status': 'success',
@@ -284,12 +312,23 @@ def enqueue_command(request):
             return JsonResponse({'status': 'error', 'message': 'Missing command type'}, status=400)
             
         # Create the pending command
-        PendingCommand.objects.create(
+        CCUCommandQueue.objects.create(
             command_type=cmd_type,
             target_id=target,
             payload=payload
         )
         
+        if cmd_type == "CMD_ADD_DEVICE":
+            device_id_raw = payload.get("id", "")
+            device_name = payload.get("name", "Smart Outlet")
+            # Strip "0x" and uppercase for database storage
+            clean_id = device_id_raw.replace("0x", "").replace("0X", "").upper()
+            if clean_id:
+                SmartOutletDevice.objects.update_or_create(
+                    device_id=clean_id,
+                    defaults={'name': device_name}
+                )
+
         # Map command types to their corresponding Action Types for the log
         action_mapping = {
             "CMD_ADD_DEVICE": "ADD_DEVICE",
@@ -319,7 +358,7 @@ def fetch_pending_commands(request):
     Returns all pending commands as a JSON array and removes them from the queue.
     """
     try:
-        commands = PendingCommand.objects.all()
+        commands = CCUCommandQueue.objects.all()
         command_list = []
         
         for cmd in commands:

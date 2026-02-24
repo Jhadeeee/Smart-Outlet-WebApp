@@ -351,9 +351,41 @@ void loop() {
                                     if (limit > 0) {
                                         Serial.printf("  > Setting local Main Breaker limit to %d mA\n", limit);
                                         breakerMonitor.setThreshold(limit);
-                                        // TODO: if targetId != 0x00, we technically should send this to a specific outlet
+                                        if (targetId != 0x00 && targetId != 0xFF) {
+                                            Serial.printf("    > Reconfiguring node 0x%02X overload threshold to %d mA\n", targetId, limit);
+                                            outletManager.selectDevice(targetId);
+                                            // Split 16-bit integer into two bytes for HC-12 transmission
+                                            outletManager.sendCommand(CMD_SET_THRESHOLD, (limit >> 8) & 0xFF, limit & 0xFF);
+                                        }
                                     }
                                 } 
+                                else if (cmdType == "CMD_RELAY_ON") {
+                                    String socketStr = payload["socket"];
+                                    uint8_t socket = (socketStr == "A") ? SOCKET_A : ((socketStr == "B") ? SOCKET_B : 0xFF);
+                                    if (socket != 0xFF && targetId != 0x00 && targetId != 0xFF) {
+                                        Serial.printf("  > Setting Device 0x%02X Socket %s ON\n", targetId, socketStr.c_str());
+                                        outletManager.selectDevice(targetId);
+                                        outletManager.relayOn(socket);
+                                    }
+                                }
+                                else if (cmdType == "CMD_RELAY_OFF") {
+                                    String socketStr = payload["socket"];
+                                    uint8_t socket = (socketStr == "A") ? SOCKET_A : ((socketStr == "B") ? SOCKET_B : 0xFF);
+                                    if (socket != 0xFF && targetId != 0x00 && targetId != 0xFF) {
+                                        Serial.printf("  > Setting Device 0x%02X Socket %s OFF\n", targetId, socketStr.c_str());
+                                        outletManager.selectDevice(targetId);
+                                        outletManager.relayOff(socket);
+                                    }
+                                }
+                                else if (cmdType == "CMD_SET_DEVICE_ID") {
+                                    String newIdStr = payload["new_id"];
+                                    if (newIdStr.length() > 0) {
+                                        uint8_t newId = (uint8_t)strtol(newIdStr.c_str(), NULL, 16);
+                                        Serial.printf("  > Reconfiguring Smart Outlet at 0x%02X to new ID 0x%02X\n", targetId, newId);
+                                        outletManager.selectDevice(targetId);
+                                        outletManager.sendCommand(CMD_SET_DEVICE_ID, 0x00, newId);
+                                    }
+                                }
                                 else if (cmdType == "CMD_CUT_POWER") {
                                     Serial.println("  > ⛔ EMERGENCY OVERRIDE! Disconnecting all output loads.");
                                     if (targetId == 0x00 || targetStr == "ALL") {
@@ -376,8 +408,23 @@ void loop() {
                                     }
                                 }
                                 else if (cmdType == "CMD_ADD_DEVICE") {
-                                   Serial.println("  > Scanning for new unconfigured devices... (Not fully implemented on PIC yet)");
-                                   // In the future: Broadcast a payload requesting devices with ID 0xFF to identify
+                                    String newIdStr = payload["id"];
+                                    String newNameStr = payload["name"];
+                                    if (newIdStr.length() > 0) {
+                                        uint8_t newId = (uint8_t)strtol(newIdStr.c_str(), NULL, 16);
+                                        Serial.printf("  > Manually adding/selecting device 0x%02X (%s)\n", newId, newNameStr.c_str());
+                                        outletManager.selectDevice(newId);
+                                        for (uint8_t i = 0; i < outletManager.getDeviceCount(); i++) {
+                                            if (outletManager.getDevice(i).getDeviceId() == newId) {
+                                                if (newNameStr.length() > 0) {
+                                                    outletManager.getDevice(i).setName(newNameStr.c_str());
+                                                }
+                                                break;
+                                            }
+                                        }
+                                    } else {
+                                       Serial.println("  > Scanning for new unconfigured devices... (Not fully implemented on PIC yet)");
+                                    }
                                 }
                                 else if (cmdType == "CMD_SET_ID_MASTER") {
                                     String newIdStr = payload["new_id"];

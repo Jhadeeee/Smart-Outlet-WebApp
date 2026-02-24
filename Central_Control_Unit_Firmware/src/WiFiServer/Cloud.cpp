@@ -32,7 +32,7 @@ int Cloud::sendData(const String& jsonPayload) {
     }
 
     HTTPClient http;
-    String endpoint = _serverUrl + "/api/data";  // Customize this endpoint
+    String endpoint = _serverUrl + "/api/test-log/";  // Endpoint customized for test log
 
     http.begin(endpoint);
     http.addHeader("Content-Type", "application/json");
