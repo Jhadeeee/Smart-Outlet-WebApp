@@ -7,7 +7,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Security settings
 SECRET_KEY = config('SECRET_KEY')
 DEBUG = config('DEBUG', default=False, cast=bool)
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1').split(',')
+ALLOWED_HOSTS = ['*']  # Allow all hosts (ESP32 + local network access)
 
 # Application definition
 INSTALLED_APPS = [
@@ -71,14 +71,10 @@ DATABASES = {
     }
 }
 
-# Django Channels Configuration
+# Django Channels Configuration — In-memory for dev (no Redis needed)
 CHANNEL_LAYERS = {
     'default': {
-        'BACKEND': 'channels_redis.core.RedisChannelLayer',
-        'CONFIG': {
-            "hosts": [(config('REDIS_HOST', default='localhost'), 
-                      config('REDIS_PORT', default=6379, cast=int))],
-        },
+        'BACKEND': 'channels.layers.InMemoryChannelLayer',
     },
 }
 

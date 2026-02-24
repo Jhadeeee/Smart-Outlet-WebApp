@@ -28,6 +28,23 @@ def save_user_profile(sender, instance, **kwargs):
         instance.profile.save()
 
 
+class CentralControlUnit(models.Model):
+    """ESP32 Central Control Unit — links a physical CCU to a user account"""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='ccus')
+    ccu_id = models.CharField(max_length=10, unique=True, help_text="CCU device ID, e.g. '01'")
+    name = models.CharField(max_length=100, default='My CCU')
+    location = models.CharField(max_length=100, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Central Control Unit'
+        verbose_name_plural = 'Central Control Units'
+
+    def __str__(self):
+        return f"{self.name} (ID: {self.ccu_id}) — {self.user.username}"
+
+
 class Outlet(models.Model):
     """Smart Outlet Device Model — matches CCU firmware OutletDevice"""
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='outlets')
@@ -77,6 +94,9 @@ class MainBreakerReading(models.Model):
     Read directly by ESP32 ADC — independent of smart outlet data.
     """
     ccu_id = models.CharField(max_length=10, help_text="CCU sender ID, e.g. '01'")
+    ccu_device = models.ForeignKey(CentralControlUnit, null=True, blank=True,
+                            on_delete=models.SET_NULL, related_name='breaker_readings',
+                            help_text="Linked CCU device (auto-set from ccu_id)")
     current_ma = models.IntegerField(help_text="Total load current in mA from SCT sensor")
     timestamp = models.DateTimeField(auto_now_add=True)
 

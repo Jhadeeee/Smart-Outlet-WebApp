@@ -4,7 +4,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.contrib import messages
 from django.http import JsonResponse
-from .models import Outlet, SensorData, UserProfile, PendingCommand, MainBreakerReading
+from .models import Outlet, SensorData, UserProfile, PendingCommand, MainBreakerReading, CentralControlUnit
 
 # ============ AUTHENTICATION VIEWS ============
 
@@ -109,10 +109,17 @@ def home_view(request):
             'has_data': latest is not None,
         })
     
-    # Get total load from SCT-013 sensor (main breaker)
-    # The CCU sends breaker readings with its ccu_id
-    latest_breaker = MainBreakerReading.objects.first()  # ordered by -timestamp
-    total_current = latest_breaker.current_ma if latest_breaker else 0
+    # Get user's registered CCUs
+    user_ccus = CentralControlUnit.objects.filter(user=request.user)
+    user_ccu_ids = list(user_ccus.values_list('ccu_id', flat=True))
+    
+    # Get total load from SCT-013 sensor (main breaker) — filtered by user's CCUs
+    total_current = 0
+    first_ccu_id = ''
+    if user_ccu_ids:
+        latest_breaker = MainBreakerReading.objects.filter(ccu_id__in=user_ccu_ids).first()
+        total_current = latest_breaker.current_ma if latest_breaker else 0
+        first_ccu_id = user_ccu_ids[0]
     
     active_count = sum(1 for o in outlets if o.relay_a or o.relay_b)
     inactive_count = len(outlet_data) - active_count
@@ -121,7 +128,8 @@ def home_view(request):
         'user': request.user,
         'outlet_data': outlet_data,
         'total_current_amps': round(total_current / 1000.0, 2),
-        'ccu_id': latest_breaker.ccu_id if latest_breaker else '01',
+        'user_ccus': user_ccus,
+        'ccu_id': first_ccu_id,
         'active_count': active_count,
         'inactive_count': inactive_count,
         'outlet_count': len(outlet_data),
@@ -186,3 +194,96 @@ def toggle_outlet(request, device_id):
         })
     
     return JsonResponse({'success': False, 'message': 'Invalid request method'})
+
+
+@login_required
+def add_outlet(request):
+    """Register a new smart outlet device."""
+    if request.method == 'POST':
+        name = request.POST.get('name', '').strip()
+        device_id = request.POST.get('device_id', '').strip().upper()
+        location = request.POST.get('location', '').strip()
+
+        if not name or not device_id:
+            messages.error(request, 'Name and Device ID are required.')
+            return redirect('outlets:home')
+
+        # Validate hex ID (1-2 hex chars)
+        try:
+            int(device_id, 16)
+        except ValueError:
+            messages.error(request, 'Device ID must be a valid hex value (e.g. FE).')
+            return redirect('outlets:home')
+
+        # Check for duplicate device_id
+        if Outlet.objects.filter(device_id=device_id).exists():
+            messages.error(request, f'Device ID "{device_id}" is already registered.')
+            return redirect('outlets:home')
+
+        Outlet.objects.create(
+            user=request.user,
+            name=name,
+            device_id=device_id,
+            location=location,
+        )
+        messages.success(request, f'Outlet "{name}" (0x{device_id}) added successfully!')
+        return redirect('outlets:home')
+
+    return redirect('outlets:home')
+
+
+@login_required
+def delete_outlet(request, device_id):
+    """Remove a registered smart outlet."""
+    if request.method == 'POST':
+        outlet = get_object_or_404(Outlet, device_id=device_id, user=request.user)
+        name = outlet.name
+        outlet.delete()
+        messages.success(request, f'Outlet "{name}" removed.')
+        return redirect('outlets:home')
+
+    return redirect('outlets:home')
+
+
+# ============ CCU MANAGEMENT ============
+
+@login_required
+def add_ccu(request):
+    """Register a new Central Control Unit (ESP32) to the user."""
+    if request.method == 'POST':
+        ccu_id = request.POST.get('ccu_id', '').strip().upper()
+        name = request.POST.get('name', '').strip() or 'My CCU'
+        location = request.POST.get('location', '').strip()
+
+        if not ccu_id:
+            messages.error(request, 'CCU ID is required.')
+            return redirect('outlets:home')
+
+        # Check for duplicate ccu_id
+        if CentralControlUnit.objects.filter(ccu_id=ccu_id).exists():
+            messages.error(request, f'CCU ID "{ccu_id}" is already registered.')
+            return redirect('outlets:home')
+
+        CentralControlUnit.objects.create(
+            user=request.user,
+            ccu_id=ccu_id,
+            name=name,
+            location=location,
+        )
+        messages.success(request, f'CCU "{name}" (ID: {ccu_id}) registered successfully!')
+        return redirect('outlets:home')
+
+    return redirect('outlets:home')
+
+
+@login_required
+def delete_ccu(request, ccu_id):
+    """Remove a registered Central Control Unit."""
+    if request.method == 'POST':
+        ccu = get_object_or_404(CentralControlUnit, ccu_id=ccu_id, user=request.user)
+        name = ccu.name
+        ccu.delete()
+        messages.success(request, f'CCU "{name}" removed.')
+        return redirect('outlets:home')
+
+    return redirect('outlets:home')

@@ -132,6 +132,7 @@
             position: sticky;
             top: 0;
             z-index: 100;
+            overflow: visible;
         }
 
         .navbar-brand {
@@ -581,6 +582,179 @@
             font-size: 13px;
         }
 
+        /* ─── Add Outlet Button (in section header) ─── */
+        .section-label {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .btn-add-outlet {
+            padding: 6px 14px;
+            background: rgba(124, 92, 191, 0.2);
+            border: 1px dashed rgba(124, 92, 191, 0.5);
+            border-radius: 8px;
+            color: var(--accent-purple);
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-add-outlet:hover {
+            background: rgba(124, 92, 191, 0.35);
+            border-color: var(--accent-purple);
+        }
+
+        /* ─── Add Outlet Button (empty state) ─── */
+        .btn-add-first {
+            margin-top: 16px;
+            padding: 12px 28px;
+            background: linear-gradient(135deg, var(--accent-purple), var(--accent-pink));
+            border: none;
+            border-radius: 12px;
+            color: #fff;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            animation: fadeInUp 0.5s ease-out 0.5s backwards;
+        }
+
+        .btn-add-first:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(124, 92, 191, 0.4);
+        }
+
+        /* ─── Delete Outlet Button ─── */
+        .btn-delete-outlet {
+            background: none;
+            border: none;
+            color: rgba(255, 255, 255, 0.25);
+            font-size: 14px;
+            cursor: pointer;
+            padding: 6px 8px;
+            border-radius: 6px;
+            transition: all 0.2s;
+        }
+
+        .btn-delete-outlet:hover {
+            color: var(--danger-red);
+            background: rgba(233, 69, 96, 0.15);
+        }
+
+        /* ─── Modal Overlay ─── */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.65);
+            backdrop-filter: blur(4px);
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-card {
+            background: linear-gradient(135deg, #1a1a3e, #252555);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 18px;
+            padding: 28px;
+            width: 90%;
+            max-width: 400px;
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+            animation: fadeInUp 0.25s ease-out;
+        }
+
+        .modal-card h3 {
+            color: rgba(255, 255, 255, 0.95);
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 20px;
+        }
+
+        .modal-card h3 i {
+            color: var(--primary-purple);
+            margin-right: 8px;
+        }
+
+        .modal-field {
+            margin-bottom: 14px;
+        }
+
+        .modal-field label {
+            display: block;
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 12px;
+            font-weight: 500;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .modal-field input {
+            width: 100%;
+            padding: 10px 14px;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 10px;
+            color: #fff;
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .modal-field input:focus {
+            border-color: var(--primary-purple);
+        }
+
+        .modal-field input::placeholder {
+            color: rgba(255, 255, 255, 0.25);
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .btn-modal-cancel {
+            flex: 1;
+            padding: 11px;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 10px;
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-modal-cancel:hover {
+            background: rgba(255, 255, 255, 0.12);
+        }
+
+        .btn-modal-save {
+            flex: 1;
+            padding: 11px;
+            background: linear-gradient(135deg, var(--primary-purple), var(--secondary-purple));
+            border: none;
+            border-radius: 10px;
+            color: #fff;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-modal-save:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+
         /* ─── Alerts Toast ─── */
         .toast-container {
             position: fixed;
@@ -754,6 +928,89 @@
             font-size: 16px;
         }
 
+        /* ─── CCU Cards ─── */
+        .ccu-card {
+            background: rgba(255, 255, 255, 0.07);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--glass-border);
+            border-radius: 14px;
+            padding: 14px 18px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            animation: fadeInUp 0.5s ease-out backwards;
+        }
+
+        .ccu-card:hover {
+            background: rgba(255, 255, 255, 0.12);
+        }
+
+        .ccu-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .ccu-icon {
+            width: 38px;
+            height: 38px;
+            background: rgba(34, 197, 94, 0.15);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--success-green);
+            font-size: 15px;
+            flex-shrink: 0;
+        }
+
+        .ccu-name {
+            font-weight: 600;
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        .ccu-detail {
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.35);
+            font-family: monospace;
+            margin-top: 2px;
+        }
+
+        .btn-delete-ccu {
+            background: none;
+            border: none;
+            color: rgba(255, 255, 255, 0.25);
+            font-size: 13px;
+            cursor: pointer;
+            padding: 5px 7px;
+            border-radius: 6px;
+            transition: all 0.2s;
+        }
+
+        .btn-delete-ccu:hover {
+            color: var(--danger-red);
+            background: rgba(233, 69, 96, 0.15);
+        }
+
+        .btn-add-ccu {
+            padding: 6px 14px;
+            background: rgba(34, 197, 94, 0.15);
+            border: 1px dashed rgba(34, 197, 94, 0.4);
+            border-radius: 8px;
+            color: var(--success-green);
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-add-ccu:hover {
+            background: rgba(34, 197, 94, 0.25);
+            border-color: var(--success-green);
+        }
+
         /* ─── Responsive ─── */
         @media (max-width: 576px) {
             .navbar-brand {
@@ -868,8 +1125,64 @@
                         <span class="status-badge inactive">Inactive: {{ inactive_count }}</span>
                     </div>
 
+                    <!-- Registered CCUs -->
+                    <div class="section-label">
+                        My CCU (ESP32)
+                        <button class="btn-add-ccu"
+                            onclick="document.getElementById('addCcuModal').style.display='flex'">
+                            <i class="fas fa-plus"></i> Add CCU
+                        </button>
+                    </div>
+
+                    {% if user_ccus %}
+                    {% for ccu in user_ccus %}
+                    <div class="ccu-card" style="animation-delay: {{ forloop.counter0 }}00ms">
+                        <div class="ccu-info">
+                            <div class="ccu-icon">
+                                <i class="fas fa-microchip"></i>
+                            </div>
+                            <div>
+                                <div class="ccu-name">{{ ccu.name }}</div>
+                                <div class="ccu-detail">
+                                    ID: {{ ccu.ccu_id }}
+                                    {% if ccu.location %} · {{ ccu.location }}{% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        <form method="post" action="{% url 'outlets:delete_ccu' ccu.ccu_id %}"
+                            onsubmit="return confirm('Remove CCU {{ ccu.name }}?')" style="margin:0">
+                            {% csrf_token %}
+                            <button type="submit" class="btn-delete-ccu" title="Remove CCU">
+                                <i class="fas fa-trash-alt"></i>
+                            </button>
+                        </form>
+                    </div>
+                    {% endfor %}
+                    {% else %}
+                    <div class="ccu-card">
+                        <div class="ccu-info">
+                            <div class="ccu-icon"
+                                style="background: rgba(148,163,184,0.15); color: var(--inactive-gray)">
+                                <i class="fas fa-microchip"></i>
+                            </div>
+                            <div>
+                                <div class="ccu-name" style="color: rgba(255,255,255,0.4)">No CCU registered</div>
+                                <div class="ccu-detail">Click "Add CCU" to link your ESP32</div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+
                     <!-- Outlet List -->
-                    <div class="section-label">Connected Outlets ({{ outlet_count }})</div>
+                    <div class="section-label">
+                        Connected Outlets ({{ outlet_count }})
+                        {% if outlet_data %}
+                        <button class="btn-add-outlet"
+                            onclick="document.getElementById('addOutletModal').style.display='flex'">
+                            <i class="fas fa-plus"></i> Add Outlet
+                        </button>
+                        {% endif %}
+                    </div>
                     <div class="outlet-list" id="outletList">
 
                         {% if outlet_data %}
@@ -906,6 +1219,13 @@
                                         </div>
                                     </div>
                                 </div>
+                                <form method="post" action="{% url 'outlets:delete_outlet' item.outlet.device_id %}"
+                                    onsubmit="return confirm('Remove {{ item.outlet.name }}?')" style="margin:0">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn-delete-outlet" title="Remove outlet">
+                                        <i class="fas fa-trash-alt"></i>
+                                    </button>
+                                </form>
                             </div>
 
                             <!-- Per-Socket Controls -->
@@ -946,14 +1266,91 @@
                         {% else %}
                         <div class="empty-state">
                             <i class="fas fa-plug"></i>
-                            <h3>No outlets connected yet</h3>
-                            <p>Register outlets via the Admin Panel to start monitoring.</p>
+                            <h3>No outlets registered yet</h3>
+                            <p>Add your Smart Outlet devices to start monitoring.</p>
+                            <button class="btn-add-first"
+                                onclick="document.getElementById('addOutletModal').style.display='flex'">
+                                <i class="fas fa-plus"></i> Add Outlet
+                            </button>
                         </div>
                         {% endif %}
                     </div>
 
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- Add Outlet Modal -->
+    <div class="modal-overlay" id="addOutletModal" style="display:none">
+        <div class="modal-card">
+            <h3><i class="fas fa-plug"></i> Add New Outlet</h3>
+            <form method="post" action="{% url 'outlets:add_outlet' %}">
+                {% csrf_token %}
+                <div class="modal-field">
+                    <label>Outlet Name</label>
+                    <input type="text" name="name" placeholder="e.g. Living Room Outlet" required>
+                </div>
+                <div class="modal-field">
+                    <label>Device ID (Hex)</label>
+                    <div style="display:flex;align-items:center;gap:6px">
+                        <span style="color:var(--accent-purple);font-weight:600">0x</span>
+                        <input type="text" name="device_id" placeholder="FE" maxlength="2" required
+                            style="width:70px;text-transform:uppercase;text-align:center">
+                    </div>
+                    <small style="color:var(--muted-text);font-size:11px">
+                        Must match the PIC Device ID programmed in your Smart Outlet
+                    </small>
+                </div>
+                <div class="modal-field">
+                    <label>Location (optional)</label>
+                    <input type="text" name="location" placeholder="e.g. Bedroom, Kitchen">
+                </div>
+                <div class="modal-buttons">
+                    <button type="button" class="btn-modal-cancel"
+                        onclick="document.getElementById('addOutletModal').style.display='none'">
+                        Cancel
+                    </button>
+                    <button type="submit" class="btn-modal-save">
+                        <i class="fas fa-plus"></i> Add Outlet
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Add CCU Modal -->
+    <div class="modal-overlay" id="addCcuModal" style="display:none">
+        <div class="modal-card">
+            <h3><i class="fas fa-microchip"></i> Register CCU (ESP32)</h3>
+            <form method="post" action="{% url 'outlets:add_ccu' %}">
+                {% csrf_token %}
+                <div class="modal-field">
+                    <label>CCU Name</label>
+                    <input type="text" name="name" placeholder="e.g. Main Hub" value="My CCU">
+                </div>
+                <div class="modal-field">
+                    <label>CCU ID</label>
+                    <input type="text" name="ccu_id" placeholder="e.g. 01" maxlength="10" required
+                        style="text-transform:uppercase">
+                    <small style="color:rgba(255,255,255,0.35);font-size:11px">
+                        Must match the CCU ID programmed in your ESP32 firmware
+                    </small>
+                </div>
+                <div class="modal-field">
+                    <label>Location (optional)</label>
+                    <input type="text" name="location" placeholder="e.g. Living Room">
+                </div>
+                <div class="modal-buttons">
+                    <button type="button" class="btn-modal-cancel"
+                        onclick="document.getElementById('addCcuModal').style.display='none'">
+                        Cancel
+                    </button>
+                    <button type="submit" class="btn-modal-save">
+                        <i class="fas fa-plus"></i> Register CCU
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 
@@ -1028,20 +1425,22 @@
         const profileBtn = document.getElementById('profileBtn');
         const profileDropdown = document.getElementById('profileDropdown');
 
-        profileBtn.addEventListener('click', function (e) {
-            e.stopPropagation();
-            profileDropdown.classList.toggle('show');
-        });
+        if (profileBtn && profileDropdown) {
+            profileBtn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                profileDropdown.classList.toggle('show');
+            });
 
-        document.addEventListener('click', function (e) {
-            if (!profileDropdown.contains(e.target) && !profileBtn.contains(e.target)) {
-                profileDropdown.classList.remove('show');
-            }
-        });
+            document.addEventListener('click', function (e) {
+                if (!profileDropdown.contains(e.target) && !profileBtn.contains(e.target)) {
+                    profileDropdown.classList.remove('show');
+                }
+            });
 
-        document.addEventListener('keydown', function (e) {
-            if (e.key === 'Escape') profileDropdown.classList.remove('show');
-        });
+            document.addEventListener('keydown', function (e) {
+                if (e.key === 'Escape') profileDropdown.classList.remove('show');
+            });
+        }
 
 
         // ─── WebSocket Connections ───
@@ -1108,11 +1507,11 @@
         connectWebSocket('{{ item.outlet.device_id }}');
         {% endfor %}
 
-        // Initialize Breaker WebSocket
-        const ccuId = '{{ ccu_id }}';
-        if (ccuId) {
-            connectWebSocket(ccuId, true);
-        }
+        // Initialize Breaker WebSocket — connect to each of user's CCUs
+        {% for ccu in user_ccus %}
+        connectWebSocket('{{ ccu.ccu_id }}', true);
+        {% endfor %}
+    </script>
+</body>
 
-
-</html >
+</html>

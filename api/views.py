@@ -3,7 +3,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.utils import timezone
 from datetime import timedelta
-from outlets.models import Outlet, SensorData, Alert, PendingCommand, MainBreakerReading
+from outlets.models import Outlet, SensorData, Alert, PendingCommand, MainBreakerReading, CentralControlUnit
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 import json
@@ -171,9 +171,12 @@ def receive_breaker_data(request):
                 'message': f'Missing required fields. Required: {required_fields}'
             }, status=400)
         
-        ccu_id = str(data['ccu_id']).upper()
+        ccu_id = str(data['ccu_id']).upper().zfill(2)  # '1' → '01' to match registered format
         current_ma = int(data['current_ma'])
         now = timezone.now()
+        
+        # Look up registered CCU (if exists)
+        ccu_obj = CentralControlUnit.objects.filter(ccu_id=ccu_id).first()
         
         # DB write: only persist every DB_LOG_INTERVAL
         saved_to_db = False
@@ -181,6 +184,7 @@ def receive_breaker_data(request):
         if not last_entry or (now - last_entry.timestamp) >= DB_LOG_INTERVAL:
             MainBreakerReading.objects.create(
                 ccu_id=ccu_id,
+                ccu_device=ccu_obj,
                 current_ma=current_ma,
             )
             saved_to_db = True

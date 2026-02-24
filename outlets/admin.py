@@ -1,10 +1,17 @@
 from django.contrib import admin
-from .models import Outlet, SensorData, OutletSchedule, Alert, UserProfile, PendingCommand, MainBreakerReading
+from .models import Outlet, SensorData, OutletSchedule, Alert, UserProfile, PendingCommand, MainBreakerReading, CentralControlUnit
 
 @admin.register(UserProfile)
 class UserProfileAdmin(admin.ModelAdmin):
     list_display = ['user', 'country', 'barangay', 'phone_number', 'created_at']
     search_fields = ['user__username', 'country', 'barangay']
+    readonly_fields = ['created_at']
+
+@admin.register(CentralControlUnit)
+class CentralControlUnitAdmin(admin.ModelAdmin):
+    list_display = ['ccu_id', 'name', 'user', 'location', 'created_at']
+    list_filter = ['user', 'created_at']
+    search_fields = ['ccu_id', 'name', 'user__username']
     readonly_fields = ['created_at']
 
 @admin.register(Outlet)
