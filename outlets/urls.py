@@ -22,4 +22,5 @@ urlpatterns = [
     path('api/test-log/clear/', views.clear_test_logs, name='clear_test_logs'),
     path('api/test-log/', views.receive_test_log, name='receive_test_log'),
     path('api/test-command/', views.enqueue_command, name='enqueue_command'),
+    path('api/test-command/fetch/', views.fetch_pending_commands, name='fetch_pending_commands'),
 ]

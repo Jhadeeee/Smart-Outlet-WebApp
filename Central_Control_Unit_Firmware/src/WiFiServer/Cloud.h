@@ -22,6 +22,9 @@ public:
     // Send JSON data to server via POST
     int sendData(const String& jsonPayload);
 
+    // Fetch pending commands from server via GET
+    String fetchCommands();
+
     // Check if server is reachable (GET request)
     bool isReachable();
 

@@ -320,6 +320,76 @@ void loop() {
                     }
                     cloudFailCount = 0;
                     statusLED.setPattern(LEDPattern::SOLID);
+                    
+                    // --- PHASE 2: Fetch and Execute Pending Commands ---
+                    String commandJson = cloud.fetchCommands();
+                    if (commandJson != "" && commandJson != "{}") {
+                        StaticJsonDocument<2048> cmdDoc;
+                        DeserializationError err = deserializeJson(cmdDoc, commandJson);
+                        
+                        // Proceed only if parsing succeeded and the server reported success
+                        if (!err && cmdDoc["status"] == "success") {
+                            JsonArray cmds = cmdDoc["commands"].as<JsonArray>();
+                            
+                            for (JsonObject cmd : cmds) {
+                                String cmdType = cmd["command"];
+                                String targetStr = cmd["target"];   // e.g "ALL", "0xFE"
+                                JsonObject payload = cmd["payload"];
+                                
+                                Serial.println("📥 [CCU Command] Received: " + cmdType + " for " + targetStr);
+                                
+                                // Convert target string back to hex byte 
+                                // Default to broadcast (0x00) if "ALL" doesn't parse
+                                uint8_t targetId = 0x00;
+                                if (targetStr != "ALL" && targetStr.length() > 0) {
+                                    targetId = (uint8_t)strtol(targetStr.c_str(), NULL, 16);
+                                }
+                                
+                                // Execute local or HC-12 Actions based on Command Type
+                                if (cmdType == "CMD_SET_LIMIT") {
+                                    int limit = payload["limit_mA"] | -1;
+                                    if (limit > 0) {
+                                        Serial.printf("  > Setting local Main Breaker limit to %d mA\n", limit);
+                                        breakerMonitor.setThreshold(limit);
+                                        // TODO: if targetId != 0x00, we technically should send this to a specific outlet
+                                    }
+                                } 
+                                else if (cmdType == "CMD_CUT_POWER") {
+                                    Serial.println("  > ⛔ EMERGENCY OVERRIDE! Disconnecting all output loads.");
+                                    if (targetId == 0x00 || targetStr == "ALL") {
+                                       // Loop through all physical devices and kill them
+                                       for (uint8_t i = 0; i < outletManager.getDeviceCount(); i++) {
+                                           OutletDevice& dev = outletManager.getDevice(i);
+                                           if (dev.getDeviceId() != 0x00 && dev.getDeviceId() != 0xFF) {
+                                               Serial.printf("    > Sending KILL to Outlet 0x%02X\n", dev.getDeviceId());
+                                               outletManager.setRelays(dev.getDeviceId(), false, false);
+                                               delay(150); // Small delay so the HC-12 buffer doesn't overflow
+                                           }
+                                       }
+                                    } else {
+                                        Serial.printf("    > Sending KILL to Outlet 0x%02X\n", targetId);
+                                        outletManager.setRelays(targetId, false, false);
+                                    }
+                                }
+                                else if (cmdType == "CMD_ADD_DEVICE") {
+                                   Serial.println("  > Scanning for new unconfigured devices... (Not fully implemented on PIC yet)");
+                                   // In the future: Broadcast a payload requesting devices with ID 0xFF to identify
+                                }
+                                else if (cmdType == "CMD_SET_ID_MASTER") {
+                                    String newIdStr = payload["new_id"];
+                                    if (newIdStr.length() > 0) {
+                                        uint8_t newId = (uint8_t)strtol(newIdStr.c_str(), NULL, 16);
+                                        Serial.printf("  > Updating CCU Master ID Config to 0x%02X\n", newId);
+                                        // Currently hardcoded by CCU_SENDER_ID in Config.h, but we can log intent:
+                                        Serial.println("    (Config.h modification required to persist)");
+                                    }
+                                }
+                            }
+                        } else if (err) {
+                            Serial.println("✗ Failed to parse command JSON: " + String(err.c_str()));
+                        }
+                    }
+                    
                 } else {
                     cloudFailCount++;
                     if (cloudFailCount == 1) {

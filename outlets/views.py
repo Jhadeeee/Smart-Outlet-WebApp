@@ -310,3 +310,32 @@ def enqueue_command(request):
         
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def fetch_pending_commands(request):
+    """
+    Called by the ESP32 CCU during its heartbeat.
+    Returns all pending commands as a JSON array and removes them from the queue.
+    """
+    try:
+        commands = PendingCommand.objects.all()
+        command_list = []
+        
+        for cmd in commands:
+            command_list.append({
+                'id': cmd.id,
+                'command': cmd.command_type,
+                'target': cmd.target_id,
+                'payload': cmd.payload,
+                'created_at': cmd.created_at.isoformat()
+            })
+            
+        # Delete fetched commands so they aren't processed twice
+        if command_list:
+            commands.delete()
+            
+        return JsonResponse({'status': 'success', 'commands': command_list})
+        
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
