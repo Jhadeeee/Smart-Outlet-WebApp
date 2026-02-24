@@ -16,4 +16,10 @@ urlpatterns = [
     path('dashboard/', views.dashboard, name='dashboard'),
     path('outlet/<str:device_id>/', views.outlet_detail, name='outlet_detail'),
     path('outlet/<str:device_id>/toggle/', views.toggle_outlet, name='toggle_outlet'),
+    
+    # Testing & Calibration Dashboard (Bypass Login)
+    path('test-dashboard/', views.test_dashboard_view, name='test_dashboard'),
+    path('api/test-log/clear/', views.clear_test_logs, name='clear_test_logs'),
+    path('api/test-log/', views.receive_test_log, name='receive_test_log'),
+    path('api/test-command/', views.enqueue_command, name='enqueue_command'),
 ]

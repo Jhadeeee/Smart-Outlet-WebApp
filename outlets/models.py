@@ -106,3 +106,98 @@ class Alert(models.Model):
     
     def __str__(self):
         return f"{self.get_alert_type_display()} - {self.outlet.name}"
+
+
+# ==========================================
+# TESTING & CALIBRATION DASHBOARD MODELS
+# ==========================================
+
+class PendingCommand(models.Model):
+    """
+    Queue for commands destined for the ESP32.
+    Since the ESP32 wakes up every 10s to POST telemetry, the server
+    cannot push data down directly. We enqueue it here, and the server
+    returns the oldest pending command in its HTTP response to the POST.
+    """
+    created_at = models.DateTimeField(auto_now_add=True)
+    command_type = models.CharField(max_length=50, help_text="e.g., ADD_DEVICE, SET_MASTER_ID, CUT_POWER")
+    target_id = models.CharField(max_length=50, null=True, blank=True, help_text="e.g., 0xFE, NULL for broadcast")
+    payload = models.JSONField(help_text="Any extra command parameters")
+    
+    # Has the ESP32 picked this up yet?
+    is_delivered = models.BooleanField(default=False)
+    delivered_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['created_at']
+
+class TestTelemetryLog(models.Model):
+    """
+    Append-only ledger for storing raw telemetry data from the ESP32 CCU.
+    Used for calibration and academic logging.
+    """
+    timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
+    
+    # Main System Readings (CCU)
+    main_breaker_mA = models.IntegerField(help_text="Total system current in mA")
+    main_breaker_limit_mA = models.IntegerField(help_text="Active overload limit for main breaker")
+    
+    # Specific Device Readings (Smart Outlet)
+    device_id = models.CharField(max_length=50, help_text="Hex ID of the PIC device (e.g. 0xFE)")
+    device_limit_mA = models.IntegerField(help_text="Overload limit for this specific device")
+    
+    # Socket A State
+    socket_a_state = models.BooleanField(help_text="Is Socket A ON (True) or OFF (False)")
+    socket_a_mA = models.IntegerField(help_text="Current draw at Socket A in mA (-1 if offline)")
+    
+    # Socket B State
+    socket_b_state = models.BooleanField(help_text="Is Socket B ON (True) or OFF (False)")
+    socket_b_mA = models.IntegerField(help_text="Current draw at Socket B in mA (-1 if offline)")
+
+    class Meta:
+        ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['-timestamp']),
+            models.Index(fields=['device_id', '-timestamp']),
+        ]
+
+    def __str__(self):
+        return f"[{self.timestamp.strftime('%H:%M:%S')}] {self.device_id} | Main: {self.main_breaker_mA}mA"
+
+
+class TestEventLog(models.Model):
+    """
+    Append-only ledger for recording physical and digital actions for testing.
+    """
+    # Allowed Action Types
+    ACTION_CHOICES = [
+        ('TOGGLE_RELAY', 'Toggle Relay'),
+        ('SET_THRESHOLD', 'Set Threshold'),
+        ('SET_MASTER_ID', 'Set Master ID'),
+        ('ADD_DEVICE', 'Add Device'),
+        ('DELETE_DEVICE', 'Delete Device'),
+        ('OVERLOAD_TRIPPED', 'Overload Tripped'),
+        ('ACK_RECEIVED', 'Command Acknowledged'),
+        ('SYSTEM_BOOT', 'System Boot'),
+        ('SYSTEM_CLEARED', 'System Cleared'),
+    ]
+
+    # Allowed Sources
+    SOURCE_CHOICES = [
+        ('WEB_DASHBOARD', 'Web Dashboard'),
+        ('ESP32_AUTO_CUT', 'ESP32 Auto Cutoff'),
+        ('PIC_HARDWARE', 'PIC Hardware Button'),
+        ('ESP32_SYSTEM', 'ESP32 System Logic')
+    ]
+
+    timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
+    source = models.CharField(max_length=50, choices=SOURCE_CHOICES)
+    action_type = models.CharField(max_length=50, choices=ACTION_CHOICES)
+    target_device = models.CharField(max_length=50, help_text="e.g. 0xFE, Main Breaker, or All Devices")
+    details = models.TextField(help_text="Plain English explanation of the event")
+
+    class Meta:
+        ordering = ['-timestamp']
+
+    def __str__(self):
+        return f"[{self.timestamp.strftime('%H:%M:%S')}] {self.action_type} -> {self.target_device}"

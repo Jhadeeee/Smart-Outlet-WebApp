@@ -16,7 +16,7 @@
 |:-------------------------|:--------|:---------------|:------------------------------------------------------------------------------|
 | SmartOutlet Firmware     | v5.3.1  | ✅ Stable      | [FIRMWARE_DOCS.md](Smart%20Outlet%20Device%20dev/Documentation/FIRMWARE_DOCS.md) |
 | CCU Firmware (ESP32)     | v4.0.0  | ✅ Stable      | [FIRMWARE_DOCS.md](Central%20Control%20Unit%20dev/Documentation/FIRMWARE_DOCS.md) |
-| Smart-Outlet-WebApp      | —       | 🔧 In Progress | —                                                                             |
+| Smart-Outlet-WebApp      | v1.0.0  | 🔧 In Progress | [WEBAPP_DOCS.md](Smart-Outlet-WebApp%20dev/Documentation/WEBAPP_DOCS.md)            |
 | Outlet Breaker (SCT013)  | v4.0.0  | 🔧 In Progress | [FIRMWARE_DOCS.md](Central%20Control%20Unit%20dev/Documentation/FIRMWARE_DOCS.md) |
 
 ---
@@ -44,7 +44,9 @@
 
 | Date       | Version | Milestone                                                                 |
 |:-----------|:--------|:--------------------------------------------------------------------------|
-| 2026-02-12 | —       | Initial setup — Django project with dev server running                    |
+| 2026-02-24 | v1.1.0  | Fully functional Test Dashboard — 2-way sync queueing, Telemetry log UI   |
+| 2026-02-24 | v1.0.0  | Added comprehensive developer documentation `WEBAPP_DOCS.md`              |
+| 2026-02-12 | v1.0.0  | Basic WebApp — Auth, Chatbot, WebSocket layer, API routes, Local Dev Mode |
 
 ---
 
@@ -68,6 +70,7 @@
 | PIC Circuit Diagram           | [Smart outlet_Actual_Circuit_v5.2.0.PDF](Smart%20Outlet%20Device%20dev/Images/Smart%20outlet_Actual_Circuit_v5.2.0.PDF) |
 | CCU Firmware Docs             | [FIRMWARE_DOCS.md](Central%20Control%20Unit%20dev/Documentation/FIRMWARE_DOCS.md)                  |
 | User Testing Guide            | [User_Testing_Guide.md](Central%20Control%20Unit%20dev/Documentation/User_Testing_Guide.md)        |
+| WebApp Developer Docs         | [WEBAPP_DOCS.md](Smart-Outlet-WebApp%20dev/Documentation/WEBAPP_DOCS.md)                           |
 
 ---
 

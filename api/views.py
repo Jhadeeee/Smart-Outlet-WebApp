@@ -1,7 +1,7 @@
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
-from outlets.models import Outlet, SensorData
+from outlets.models import Outlet, SensorData, TestTelemetryLog
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 import json
@@ -108,3 +108,54 @@ def get_outlet_status(request, device_id):
             'success': False,
             'message': f'Outlet with device_id {device_id} not found'
         }, status=404)
+
+# ==========================================
+# TESTING & CALIBRATION DASHBOARD API
+# ==========================================
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def receive_test_telemetry(request):
+    """
+    API endpoint for the Testing & Calibration Dashboard.
+    Receives an aggregated JSON payload every ~10s from the ESP32 CCU.
+    """
+    try:
+        payload = json.loads(request.body)
+        
+        # 1. Extract CCU Main Breaker readings
+        ccu_data = payload.get('ccu', {})
+        main_mA = ccu_data.get('main_breaker_mA', 0)
+        main_limit = ccu_data.get('main_breaker_limit_mA', 15000)
+        
+        # 2. Extract Device array
+        devices_data = payload.get('devices', [])
+        
+        # 3. Create a log entry for every connected device
+        for dev in devices_data:
+            sock_a = dev.get('socket_a', {})
+            sock_b = dev.get('socket_b', {})
+            
+            TestTelemetryLog.objects.create(
+                main_breaker_mA=main_mA,
+                main_breaker_limit_mA=main_limit,
+                device_id=dev.get('id', 'UNKNOWN'),
+                device_limit_mA=dev.get('limit_mA', 5000),
+                socket_a_state=bool(sock_a.get('state', 0)),
+                socket_a_mA=sock_a.get('mA', -1),
+                socket_b_state=bool(sock_b.get('state', 0)),
+                socket_b_mA=sock_b.get('mA', -1)
+            )
+            
+        # 4. In the future, check cache or queue for pending commands to return
+        return JsonResponse({
+            'status': 'success',
+            'pending_command': None,
+            'target': None,
+            'socket': None
+        })
+        
+    except json.JSONDecodeError:
+        return JsonResponse({'status': 'error', 'message': 'Invalid JSON format'}, status=400)
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)

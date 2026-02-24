@@ -41,6 +41,7 @@
  */
 
 #include "Config.h"
+#include <ArduinoJson.h>
 #include "src/SetupPage/ConfigStorage.h"
 #include "src/SetupPage/CaptivePortal.h"
 #include "src/WiFiServer/WiFiManager.h"
@@ -270,12 +271,47 @@ void loop() {
                 }
             }
 
-            // Periodic data sending (placeholder)
+            // Periodic data sending
             if (millis() - lastCloudSend >= CLOUD_SEND_INTERVAL_MS) {
                 lastCloudSend = millis();
 
-                // Example JSON payload — customize for your sensors
-                String payload = "{\"device\":\"CCU\",\"uptime\":" + String(millis() / 1000) + "}";
+                // Build the comprehensive Test Dashboard JSON Payload
+                StaticJsonDocument<1024> doc;
+                
+                // 1. CCU Block
+                JsonObject ccu = doc.createNestedObject("ccu");
+                ccu["uptime_seconds"] = millis() / 1000;
+                ccu["main_breaker_mA"] = breakerMonitor.getMilliAmps();
+                ccu["main_breaker_limit_mA"] = breakerMonitor.getThreshold();
+                ccu["is_overload"] = breakerMonitor.isOverload();
+                
+                // 2. Devices Array
+                JsonArray devicesArray = doc.createNestedArray("devices");
+                for (uint8_t i = 0; i < outletManager.getDeviceCount(); i++) {
+                    OutletDevice& dev = outletManager.getDevice(i);
+                    // Add device if it has a valid ID
+                    if (dev.getDeviceId() != 0x00 && dev.getDeviceId() != 0xFF) {
+                        JsonObject devObj = devicesArray.createNestedObject();
+                        // Format HEX ID as string (e.g., "FE")
+                        char hexStr[3];
+                        sprintf(hexStr, "%02X", dev.getDeviceId());
+                        devObj["id"] = String(hexStr);
+                        devObj["name"] = dev.getName();
+                        devObj["limit_mA"] = dev.getThreshold() == -1 ? 5000 : dev.getThreshold();
+                        
+                        JsonObject sockA = devObj.createNestedObject("socket_a");
+                        sockA["state"] = dev.getRelayA() == -1 ? 0 : dev.getRelayA();
+                        sockA["mA"] = dev.getCurrentA();
+                        
+                        JsonObject sockB = devObj.createNestedObject("socket_b");
+                        sockB["state"] = dev.getRelayB() == -1 ? 0 : dev.getRelayB();
+                        sockB["mA"] = dev.getCurrentB();
+                    }
+                }
+                
+                String payload;
+                serializeJson(doc, payload);
+
                 int responseCode = cloud.sendData(payload);
 
                 if (responseCode == 200) {
