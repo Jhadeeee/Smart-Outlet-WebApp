@@ -50,6 +50,32 @@ int Cloud::sendData(const String& jsonPayload) {
     return _lastResponseCode;
 }
 
+String Cloud::fetchCommands() {
+    if (_serverUrl.length() == 0 || WiFi.status() != WL_CONNECTED) {
+        return "";
+    }
+
+    HTTPClient http;
+    String endpoint = _serverUrl + "/api/test-command/fetch/";
+
+    http.begin(endpoint);
+    http.setTimeout(HTTP_TIMEOUT_MS);
+
+    _lastResponseCode = http.GET();
+
+    String response = "";
+    if (_lastResponseCode > 0) {
+        response = http.getString();
+        _lastResponse = response;
+    } else {
+        _lastResponse = http.errorToString(_lastResponseCode);
+        Serial.println("[Cloud] Fetch Failed: " + _lastResponse);
+    }
+
+    http.end();
+    return response;
+}
+
 bool Cloud::isReachable() {
     if (_serverUrl.length() == 0 || WiFi.status() != WL_CONNECTED) {
         return false;
