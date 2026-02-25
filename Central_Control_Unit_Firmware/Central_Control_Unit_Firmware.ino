@@ -1,6 +1,6 @@
 /*
  * ═══════════════════════════════════════════════════════════
- *   CCU Firmware v2.0.0 — Central Control Unit for ESP32
+ *   CCU Firmware v4.0.0 — Central Control Unit for ESP32
  * ═══════════════════════════════════════════════════════════
  *
  *  SYSTEM ARCHITECTURE:
@@ -50,7 +50,7 @@
 #include "src/HC12_RF/OutletManager.h"
 #include "src/LocalDashboard/SerialCLI.h"
 #include "src/LocalDashboard/Dashboard.h"
-#include "src/SCTSensor/SCTSensor.h"
+#include "src/BreakerMonitor/BreakerMonitor.h"
 
 // ─── Global Objects ─────────────────────────────────────────
 ConfigStorage  configStorage;
@@ -60,8 +60,8 @@ Cloud          cloud;
 StatusLED      statusLED;
 OutletManager  outletManager;
 SerialCLI      serialCLI(outletManager);
-Dashboard      dashboard(outletManager, configStorage);
-SCTSensor      sctSensor;
+BreakerMonitor breakerMonitor;
+Dashboard      dashboard(outletManager, configStorage, breakerMonitor);
 
 // ─── State Machine ──────────────────────────────────────────
 enum class DeviceMode {
@@ -74,7 +74,7 @@ DeviceMode currentMode = DeviceMode::SETUP;
 
 // ─── Timing ─────────────────────────────────────────────────
 unsigned long lastCloudSend = 0;
-unsigned long lastSCTRead   = 0;
+unsigned long lastBreakerSend = 0;
 unsigned int  cloudFailCount = 0;    // Tracks consecutive failures to suppress spam
 
 // ─── Factory Reset Check ────────────────────────────────────
@@ -128,6 +128,7 @@ void enterLocalDashboardMode() {
     // Start dashboard web server + HC-12
     dashboard.begin();
     outletManager.begin();
+    breakerMonitor.begin();
     serialCLI.begin();
     statusLED.setPattern(LEDPattern::SOLID);
 
@@ -158,9 +159,7 @@ void enterRunningMode() {
     // Initialize HC-12 outlet communication + dashboard
     outletManager.begin();
     serialCLI.begin();
-
-    // Initialize SCT-013 current sensor (main breaker)
-    sctSensor.begin(SCT_ADC_PIN);
+    breakerMonitor.begin();
     dashboard.begin();
 
     Serial.println("\n✓ HC-12 RF + Serial CLI + Dashboard ready.");
@@ -177,7 +176,7 @@ void setup() {
 
     Serial.println("\n");
     Serial.println("═══════════════════════════════════════");
-    Serial.println("  CCU Firmware v2.0.0 — ESP32 Boot");
+    Serial.println("  CCU Firmware v4.0.0 — ESP32 Boot");
     Serial.println("═══════════════════════════════════════");
 
     // Initialize modules
@@ -234,6 +233,7 @@ void loop() {
         case DeviceMode::LOCAL_DASHBOARD:
             dashboard.handleClient();
             outletManager.update();
+            breakerMonitor.update();
             serialCLI.update();
             break;
 
@@ -241,6 +241,9 @@ void loop() {
         case DeviceMode::RUNNING:
             // HC-12 RF: read incoming packets from smart outlets
             outletManager.update();
+
+            // Breaker Monitor: read SCT013 sensor (non-blocking)
+            breakerMonitor.update();
 
             // Serial CLI: handle debug commands from serial monitor
             serialCLI.update();
@@ -268,10 +271,10 @@ void loop() {
                 }
             }
 
-            // ─── SCT Sensor: Read and send main breaker current ───
-            if (millis() - lastSCTRead >= SCT_READ_INTERVAL_MS) {
-                lastSCTRead = millis();
-                int breakerMA = sctSensor.readCurrentRMS();
+            // ─── Breaker Monitor: Send main breaker current to cloud ───
+            if (millis() - lastBreakerSend >= BREAKER_CLOUD_INTERVAL_MS) {
+                lastBreakerSend = millis();
+                int breakerMA = breakerMonitor.getMilliAmps();
 
                 // Build JSON: {"ccu_id": "01", "current_ma": 4500}
                 String ccuHex = String(CCU_SENDER_ID, HEX);
