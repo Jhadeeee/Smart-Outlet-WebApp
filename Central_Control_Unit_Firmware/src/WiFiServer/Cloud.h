@@ -28,6 +28,9 @@ public:
     // Fetch pending commands for a specific device (GET request)
     String fetchCommands(const String& deviceId);
 
+    // Fetch registered device list from server (GET request)
+    String fetchDevices();
+
     // Check if server is reachable (GET request)
     bool isReachable();
 

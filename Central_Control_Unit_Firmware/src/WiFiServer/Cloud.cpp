@@ -91,6 +91,31 @@ String Cloud::fetchCommands(const String& deviceId) {
     return responseBody;
 }
 
+String Cloud::fetchDevices() {
+    if (_serverUrl.length() == 0 || WiFi.status() != WL_CONNECTED) {
+        return "";
+    }
+
+    HTTPClient http;
+    String endpoint = _serverUrl + "/api/devices/";
+    
+    http.begin(endpoint);
+    http.setTimeout(HTTP_TIMEOUT_MS);
+
+    _lastResponseCode = http.GET();
+    String responseBody = "";
+    
+    if (_lastResponseCode == 200) {
+        responseBody = http.getString();
+    } else if (_lastResponseCode > 0) {
+        _lastResponse = http.getString();
+    } else {
+        _lastResponse = http.errorToString(_lastResponseCode);
+    }
+    http.end();
+    return responseBody;
+}
+
 bool Cloud::isReachable() {
     if (_serverUrl.length() == 0 || WiFi.status() != WL_CONNECTED) {
         return false;

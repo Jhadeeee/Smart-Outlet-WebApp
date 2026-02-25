@@ -362,3 +362,18 @@ def get_pending_commands(request, device_id):
             'success': False,
             'message': f'Outlet with device_id {device_id} not found'
         }, status=404)
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def get_registered_outlets(request):
+    """
+    API endpoint for CCU to fetch the master list of registered outlets.
+    URL: GET /api/devices/
+    
+    Returns: { "success": true, "devices": ["FE", "FD"] }
+    """
+    outlets = Outlet.objects.values_list('device_id', flat=True)
+    return JsonResponse({
+        'success': True,
+        'devices': list(outlets)
+    })

@@ -151,6 +151,40 @@ void enterRunningMode() {
     // Check if server is reachable
     if (cloud.isReachable()) {
         Serial.println("✓ Server is reachable: " + cloud.getServerUrl());
+        
+        // Sync device list from Django database
+        Serial.println("  Syncing device list from server...");
+        String devJson = cloud.fetchDevices();
+        devJson.replace(" ", ""); // Strip spaces for parsing
+        
+        if (devJson.indexOf("\"success\":true") >= 0) {
+            // Parse device IDs from: {"success":true,"devices":["FE","FD"]}
+            int arrStart = devJson.indexOf("[");
+            int arrEnd = devJson.indexOf("]");
+            
+            if (arrStart >= 0 && arrEnd > arrStart) {
+                String arr = devJson.substring(arrStart + 1, arrEnd);
+                int count = 0;
+                
+                while (arr.length() > 0) {
+                    int qStart = arr.indexOf("\"");
+                    if (qStart < 0) break;
+                    int qEnd = arr.indexOf("\"", qStart + 1);
+                    if (qEnd < 0) break;
+                    
+                    String devId = arr.substring(qStart + 1, qEnd);
+                    uint8_t id = (uint8_t)strtol(devId.c_str(), NULL, 16);
+                    outletManager.selectDevice(id);
+                    count++;
+                    
+                    arr = arr.substring(qEnd + 1);
+                }
+                
+                Serial.println("  ✓ Synced " + String(count) + " device(s) from server.");
+            }
+        } else {
+            Serial.println("  ✗ Could not fetch device list.");
+        }
     } else {
         Serial.println("✗ Server not reachable (will retry).");
     }
@@ -274,6 +308,27 @@ void loop() {
             if (millis() - lastCloudSend >= CLOUD_SEND_INTERVAL_MS) {
                 lastCloudSend = millis();
                 bool anyFail = false;
+
+                // 0. Re-sync device list from Django (picks up newly added outlets)
+                String devJson = cloud.fetchDevices();
+                devJson.replace(" ", "");
+                if (devJson.indexOf("\"success\":true") >= 0) {
+                    int arrStart = devJson.indexOf("[");
+                    int arrEnd = devJson.indexOf("]");
+                    if (arrStart >= 0 && arrEnd > arrStart) {
+                        String arr = devJson.substring(arrStart + 1, arrEnd);
+                        while (arr.length() > 0) {
+                            int qStart = arr.indexOf("\"");
+                            if (qStart < 0) break;
+                            int qEnd = arr.indexOf("\"", qStart + 1);
+                            if (qEnd < 0) break;
+                            String devId = arr.substring(qStart + 1, qEnd);
+                            uint8_t id = (uint8_t)strtol(devId.c_str(), NULL, 16);
+                            outletManager.selectDevice(id); // No-op if already exists
+                            arr = arr.substring(qEnd + 1);
+                        }
+                    }
+                }
 
                 // 1. Request fresh sensor data & Send to Cloud
                 for (uint8_t i = 0; i < outletManager.getDeviceCount(); i++) {
