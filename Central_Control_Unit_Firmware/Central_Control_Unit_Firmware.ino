@@ -297,8 +297,8 @@ void loop() {
                     
                     payload += "\"current_a\":" + String(dev.getCurrentA()) + ",";
                     payload += "\"current_b\":" + String(dev.getCurrentB()) + ",";
-                    payload += "\"relay_a\":" + String(dev.getRelayA() ? "true" : "false") + ",";
-                    payload += "\"relay_b\":" + String(dev.getRelayB() ? "true" : "false") + ",";
+                    payload += "\"relay_a\":" + String(dev.getRelayA() == 1 ? "true" : "false") + ",";
+                    payload += "\"relay_b\":" + String(dev.getRelayB() == 1 ? "true" : "false") + ",";
                     payload += "\"is_overload\":false}";
                     
                     int res = cloud.sendSensorData(payload);
