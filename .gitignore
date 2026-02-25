@@ -170,3 +170,15 @@ dump.rdb
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Proteus (keep .PDF only)
+*.pdsprj
+*.pdsbak
+*.PWI
+*.DSN
+*.DBK
+*.SDF
+*.DRC
+
+# Project Backups
+**/Project Backups/
