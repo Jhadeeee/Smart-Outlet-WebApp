@@ -1,6 +1,6 @@
 /*
  * ═══════════════════════════════════════════════════════════
- *   CCU Firmware v4.0.0 — Central Control Unit for ESP32
+ *   CCU Firmware v2.0.0 — Central Control Unit for ESP32
  * ═══════════════════════════════════════════════════════════
  *
  *  SYSTEM ARCHITECTURE:
@@ -41,7 +41,6 @@
  */
 
 #include "Config.h"
-#include <ArduinoJson.h>
 #include "src/SetupPage/ConfigStorage.h"
 #include "src/SetupPage/CaptivePortal.h"
 #include "src/WiFiServer/WiFiManager.h"
@@ -51,7 +50,7 @@
 #include "src/HC12_RF/OutletManager.h"
 #include "src/LocalDashboard/SerialCLI.h"
 #include "src/LocalDashboard/Dashboard.h"
-#include "src/BreakerMonitor/BreakerMonitor.h"
+#include "src/SCTSensor/SCTSensor.h"
 
 // ─── Global Objects ─────────────────────────────────────────
 ConfigStorage  configStorage;
@@ -61,8 +60,8 @@ Cloud          cloud;
 StatusLED      statusLED;
 OutletManager  outletManager;
 SerialCLI      serialCLI(outletManager);
-BreakerMonitor breakerMonitor;
-Dashboard      dashboard(outletManager, configStorage, breakerMonitor);
+Dashboard      dashboard(outletManager, configStorage);
+SCTSensor      sctSensor;
 
 // ─── State Machine ──────────────────────────────────────────
 enum class DeviceMode {
@@ -75,6 +74,7 @@ DeviceMode currentMode = DeviceMode::SETUP;
 
 // ─── Timing ─────────────────────────────────────────────────
 unsigned long lastCloudSend = 0;
+unsigned long lastSCTRead   = 0;
 unsigned int  cloudFailCount = 0;    // Tracks consecutive failures to suppress spam
 
 // ─── Factory Reset Check ────────────────────────────────────
@@ -128,7 +128,6 @@ void enterLocalDashboardMode() {
     // Start dashboard web server + HC-12
     dashboard.begin();
     outletManager.begin();
-    breakerMonitor.begin();
     serialCLI.begin();
     statusLED.setPattern(LEDPattern::SOLID);
 
@@ -159,8 +158,10 @@ void enterRunningMode() {
     // Initialize HC-12 outlet communication + dashboard
     outletManager.begin();
     serialCLI.begin();
+
+    // Initialize SCT-013 current sensor (main breaker)
+    sctSensor.begin(SCT_ADC_PIN);
     dashboard.begin();
-    breakerMonitor.begin();
 
     Serial.println("\n✓ HC-12 RF + Serial CLI + Dashboard ready.");
     Serial.println("  Dashboard: http://" + wifiManager.getLocalIP().toString() + "/dashboard");
@@ -176,7 +177,7 @@ void setup() {
 
     Serial.println("\n");
     Serial.println("═══════════════════════════════════════");
-    Serial.println("  CCU Firmware v4.0.0 — ESP32 Boot");
+    Serial.println("  CCU Firmware v2.0.0 — ESP32 Boot");
     Serial.println("═══════════════════════════════════════");
 
     // Initialize modules
@@ -233,7 +234,6 @@ void loop() {
         case DeviceMode::LOCAL_DASHBOARD:
             dashboard.handleClient();
             outletManager.update();
-            breakerMonitor.update();
             serialCLI.update();
             break;
 
@@ -241,9 +241,6 @@ void loop() {
         case DeviceMode::RUNNING:
             // HC-12 RF: read incoming packets from smart outlets
             outletManager.update();
-
-            // Breaker Monitor: read SCT013 sensor
-            breakerMonitor.update();
 
             // Serial CLI: handle debug commands from serial monitor
             serialCLI.update();
@@ -271,183 +268,140 @@ void loop() {
                 }
             }
 
-            // Periodic data sending
+            // ─── SCT Sensor: Read and send main breaker current ───
+            if (millis() - lastSCTRead >= SCT_READ_INTERVAL_MS) {
+                lastSCTRead = millis();
+                int breakerMA = sctSensor.readCurrentRMS();
+
+                // Build JSON: {"ccu_id": "01", "current_ma": 4500}
+                String ccuHex = String(CCU_SENDER_ID, HEX);
+                ccuHex.toUpperCase();
+
+                String breakerPayload = "{";
+                breakerPayload += "\"ccu_id\":\"" + ccuHex + "\",";
+                breakerPayload += "\"current_ma\":" + String(breakerMA);
+                breakerPayload += "}";
+
+                int rc = cloud.sendToEndpoint("/api/breaker-data/", breakerPayload);
+                if (rc == 200) {
+                    Serial.println("[SCT] Sent breaker current: " + String(breakerMA) + "mA");
+                }
+            }
+
+            // Periodic data sending — send actual sensor data per outlet
             if (millis() - lastCloudSend >= CLOUD_SEND_INTERVAL_MS) {
                 lastCloudSend = millis();
 
-                // Build the comprehensive Test Dashboard JSON Payload
-                StaticJsonDocument<1024> doc;
-                
-                // 1. CCU Block
-                JsonObject ccu = doc.createNestedObject("ccu");
-                ccu["uptime_seconds"] = millis() / 1000;
-                ccu["main_breaker_mA"] = breakerMonitor.getMilliAmps();
-                ccu["main_breaker_limit_mA"] = breakerMonitor.getThreshold();
-                ccu["is_overload"] = breakerMonitor.isOverload();
-                
-                // 2. Devices Array
-                JsonArray devicesArray = doc.createNestedArray("devices");
-                for (uint8_t i = 0; i < outletManager.getDeviceCount(); i++) {
+                bool anySendOk = false;
+                uint8_t count = outletManager.getDeviceCount();
+
+                for (uint8_t i = 0; i < count; i++) {
                     OutletDevice& dev = outletManager.getDevice(i);
-                    // Add device if it has a valid ID
-                    if (dev.getDeviceId() != 0x00 && dev.getDeviceId() != 0xFF) {
-                        JsonObject devObj = devicesArray.createNestedObject();
-                        // Format HEX ID as string (e.g., "FE")
-                        char hexStr[3];
-                        sprintf(hexStr, "%02X", dev.getDeviceId());
-                        devObj["id"] = String(hexStr);
-                        devObj["name"] = dev.getName();
-                        devObj["limit_mA"] = dev.getThreshold() == -1 ? 5000 : dev.getThreshold();
-                        
-                        JsonObject sockA = devObj.createNestedObject("socket_a");
-                        sockA["state"] = dev.getRelayA() == -1 ? 0 : dev.getRelayA();
-                        sockA["mA"] = dev.getCurrentA();
-                        
-                        JsonObject sockB = devObj.createNestedObject("socket_b");
-                        sockB["state"] = dev.getRelayB() == -1 ? 0 : dev.getRelayB();
-                        sockB["mA"] = dev.getCurrentB();
+                    if (!dev.isActive()) continue;
+
+                    // Build JSON payload matching Django /api/data/ format
+                    String deviceHex = String(dev.getDeviceId(), HEX);
+                    deviceHex.toUpperCase();
+
+                    int curA = dev.getCurrentA();
+                    int curB = dev.getCurrentB();
+                    bool overload = (curA == 65535 || curB == 65535);
+
+                    String payload = "{";
+                    payload += "\"device_id\":\"" + deviceHex + "\",";
+                    payload += "\"current_a\":" + String(curA < 0 ? 0 : curA) + ",";
+                    payload += "\"current_b\":" + String(curB < 0 ? 0 : curB) + ",";
+                    payload += "\"relay_a\":" + String(dev.getRelayA() == 1 ? "true" : "false") + ",";
+                    payload += "\"relay_b\":" + String(dev.getRelayB() == 1 ? "true" : "false") + ",";
+                    payload += "\"is_overload\":" + String(overload ? "true" : "false");
+                    payload += "}";
+
+                    int responseCode = cloud.sendData(payload);
+                    if (responseCode == 200) anySendOk = true;
+                }
+
+                // Also poll for pending commands from the UI
+                for (uint8_t i = 0; i < count; i++) {
+                    OutletDevice& dev = outletManager.getDevice(i);
+                    if (!dev.isActive()) continue;
+
+                    String deviceHex = String(dev.getDeviceId(), HEX);
+                    deviceHex.toUpperCase();
+
+                    String cmdJson = cloud.fetchCommands(deviceHex);
+                    if (cmdJson.length() > 0) {
+                        // Select this device as target before executing commands
+                        outletManager.selectDevice(dev.getDeviceId());
+
+                        // Simple parsing: find each "command":"xxx" and "socket":"x"
+                        int searchFrom = 0;
+                        while (true) {
+                            int cmdIdx = cmdJson.indexOf("\"command\":", searchFrom);
+                            if (cmdIdx < 0) break;
+
+                            // Extract command value
+                            int valStart = cmdJson.indexOf("\"", cmdIdx + 10) + 1;
+                            int valEnd   = cmdJson.indexOf("\"", valStart);
+                            String cmd   = cmdJson.substring(valStart, valEnd);
+
+                            // Extract socket value
+                            String sock = "";
+                            int sockIdx = cmdJson.indexOf("\"socket\":", valEnd);
+                            if (sockIdx >= 0 && sockIdx < cmdJson.indexOf("}", valEnd) + 1) {
+                                int sStart = cmdJson.indexOf("\"", sockIdx + 9) + 1;
+                                int sEnd   = cmdJson.indexOf("\"", sStart);
+                                sock = cmdJson.substring(sStart, sEnd);
+                            }
+
+                            // Extract value (for threshold)
+                            int valFieldIdx = cmdJson.indexOf("\"value\":", valEnd);
+                            int cmdValue = 0;
+                            if (valFieldIdx >= 0 && valFieldIdx < cmdJson.indexOf("}", valEnd) + 1) {
+                                int numStart = valFieldIdx + 8;
+                                // Skip whitespace
+                                while (numStart < (int)cmdJson.length() && cmdJson[numStart] == ' ') numStart++;
+                                if (cmdJson[numStart] != 'n') {  // not "null"
+                                    cmdValue = cmdJson.substring(numStart).toInt();
+                                }
+                            }
+
+                            // Execute the command
+                            uint8_t socket = (sock == "b") ? SOCKET_B : SOCKET_A;
+
+                            if (cmd == "relay_on") {
+                                Serial.println("[Cloud CMD] Relay ON socket " + sock);
+                                outletManager.relayOn(socket);
+                            } else if (cmd == "relay_off") {
+                                Serial.println("[Cloud CMD] Relay OFF socket " + sock);
+                                outletManager.relayOff(socket);
+                            } else if (cmd == "set_threshold") {
+                                Serial.println("[Cloud CMD] Set threshold " + String(cmdValue) + "mA");
+                                outletManager.setThreshold(cmdValue);
+                            } else if (cmd == "read_sensors") {
+                                Serial.println("[Cloud CMD] Read sensors");
+                                outletManager.readSensors();
+                            } else if (cmd == "ping") {
+                                Serial.println("[Cloud CMD] Ping");
+                                outletManager.ping();
+                            }
+
+                            searchFrom = valEnd + 1;
+                        }
                     }
                 }
-                
-                String payload;
-                serializeJson(doc, payload);
 
-                int responseCode = cloud.sendData(payload);
-
-                if (responseCode == 200) {
+                // Status tracking
+                if (count == 0 || anySendOk) {
                     if (cloudFailCount > 0) {
                         Serial.println("✓ Cloud connection restored.");
                     }
                     cloudFailCount = 0;
                     statusLED.setPattern(LEDPattern::SOLID);
-                    
-                    // --- PHASE 2: Fetch and Execute Pending Commands ---
-                    String commandJson = cloud.fetchCommands();
-                    if (commandJson != "" && commandJson != "{}") {
-                        StaticJsonDocument<2048> cmdDoc;
-                        DeserializationError err = deserializeJson(cmdDoc, commandJson);
-                        
-                        // Proceed only if parsing succeeded and the server reported success
-                        if (!err && cmdDoc["status"] == "success") {
-                            JsonArray cmds = cmdDoc["commands"].as<JsonArray>();
-                            
-                            for (JsonObject cmd : cmds) {
-                                String cmdType = cmd["command"];
-                                String targetStr = cmd["target"];   // e.g "ALL", "0xFE"
-                                JsonObject payload = cmd["payload"];
-                                
-                                Serial.println("📥 [CCU Command] Received: " + cmdType + " for " + targetStr);
-                                
-                                // Convert target string back to hex byte 
-                                // Default to broadcast (0x00) if "ALL" doesn't parse
-                                uint8_t targetId = 0x00;
-                                if (targetStr != "ALL" && targetStr.length() > 0) {
-                                    targetId = (uint8_t)strtol(targetStr.c_str(), NULL, 16);
-                                }
-                                
-                                // Execute local or HC-12 Actions based on Command Type
-                                if (cmdType == "CMD_SET_LIMIT") {
-                                    int limit = payload["limit_mA"] | -1;
-                                    if (limit > 0) {
-                                        Serial.printf("  > Setting local Main Breaker limit to %d mA\n", limit);
-                                        breakerMonitor.setThreshold(limit);
-                                        if (targetId != 0x00 && targetId != 0xFF) {
-                                            Serial.printf("    > Reconfiguring node 0x%02X overload threshold to %d mA\n", targetId, limit);
-                                            outletManager.selectDevice(targetId);
-                                            // Split 16-bit integer into two bytes for HC-12 transmission
-                                            outletManager.sendCommand(CMD_SET_THRESHOLD, (limit >> 8) & 0xFF, limit & 0xFF);
-                                        }
-                                    }
-                                } 
-                                else if (cmdType == "CMD_RELAY_ON") {
-                                    String socketStr = payload["socket"];
-                                    uint8_t socket = (socketStr == "A") ? SOCKET_A : ((socketStr == "B") ? SOCKET_B : 0xFF);
-                                    if (socket != 0xFF && targetId != 0x00 && targetId != 0xFF) {
-                                        Serial.printf("  > Setting Device 0x%02X Socket %s ON\n", targetId, socketStr.c_str());
-                                        outletManager.selectDevice(targetId);
-                                        outletManager.relayOn(socket);
-                                    }
-                                }
-                                else if (cmdType == "CMD_RELAY_OFF") {
-                                    String socketStr = payload["socket"];
-                                    uint8_t socket = (socketStr == "A") ? SOCKET_A : ((socketStr == "B") ? SOCKET_B : 0xFF);
-                                    if (socket != 0xFF && targetId != 0x00 && targetId != 0xFF) {
-                                        Serial.printf("  > Setting Device 0x%02X Socket %s OFF\n", targetId, socketStr.c_str());
-                                        outletManager.selectDevice(targetId);
-                                        outletManager.relayOff(socket);
-                                    }
-                                }
-                                else if (cmdType == "CMD_SET_DEVICE_ID") {
-                                    String newIdStr = payload["new_id"];
-                                    if (newIdStr.length() > 0) {
-                                        uint8_t newId = (uint8_t)strtol(newIdStr.c_str(), NULL, 16);
-                                        Serial.printf("  > Reconfiguring Smart Outlet at 0x%02X to new ID 0x%02X\n", targetId, newId);
-                                        outletManager.selectDevice(targetId);
-                                        outletManager.sendCommand(CMD_SET_DEVICE_ID, 0x00, newId);
-                                    }
-                                }
-                                else if (cmdType == "CMD_CUT_POWER") {
-                                    Serial.println("  > ⛔ EMERGENCY OVERRIDE! Disconnecting all output loads.");
-                                    if (targetId == 0x00 || targetStr == "ALL") {
-                                       // Loop through all physical devices and kill them
-                                       for (uint8_t i = 0; i < outletManager.getDeviceCount(); i++) {
-                                           OutletDevice& dev = outletManager.getDevice(i);
-                                           if (dev.getDeviceId() != 0x00 && dev.getDeviceId() != 0xFF) {
-                                               Serial.printf("    > Sending KILL to Outlet 0x%02X\n", dev.getDeviceId());
-                                               outletManager.selectDevice(dev.getDeviceId());
-                                               outletManager.relayOff(SOCKET_A);
-                                               outletManager.relayOff(SOCKET_B);
-                                               delay(150); // Small delay so the HC-12 buffer doesn't overflow
-                                           }
-                                       }
-                                    } else {
-                                        Serial.printf("    > Sending KILL to Outlet 0x%02X\n", targetId);
-                                        outletManager.selectDevice(targetId);
-                                        outletManager.relayOff(SOCKET_A);
-                                        outletManager.relayOff(SOCKET_B);
-                                    }
-                                }
-                                else if (cmdType == "CMD_ADD_DEVICE") {
-                                    String newIdStr = payload["id"];
-                                    String newNameStr = payload["name"];
-                                    if (newIdStr.length() > 0) {
-                                        uint8_t newId = (uint8_t)strtol(newIdStr.c_str(), NULL, 16);
-                                        Serial.printf("  > Manually adding/selecting device 0x%02X (%s)\n", newId, newNameStr.c_str());
-                                        outletManager.selectDevice(newId);
-                                        for (uint8_t i = 0; i < outletManager.getDeviceCount(); i++) {
-                                            if (outletManager.getDevice(i).getDeviceId() == newId) {
-                                                if (newNameStr.length() > 0) {
-                                                    outletManager.getDevice(i).setName(newNameStr.c_str());
-                                                }
-                                                break;
-                                            }
-                                        }
-                                    } else {
-                                       Serial.println("  > Scanning for new unconfigured devices... (Not fully implemented on PIC yet)");
-                                    }
-                                }
-                                else if (cmdType == "CMD_SET_ID_MASTER") {
-                                    String newIdStr = payload["new_id"];
-                                    if (newIdStr.length() > 0) {
-                                        uint8_t newId = (uint8_t)strtol(newIdStr.c_str(), NULL, 16);
-                                        Serial.printf("  > Updating CCU Master ID Config to 0x%02X\n", newId);
-                                        // Currently hardcoded by CCU_SENDER_ID in Config.h, but we can log intent:
-                                        Serial.println("    (Config.h modification required to persist)");
-                                    }
-                                }
-                            }
-                        } else if (err) {
-                            Serial.println("✗ Failed to parse command JSON: " + String(err.c_str()));
-                        }
-                    }
-                    
                 } else {
                     cloudFailCount++;
                     if (cloudFailCount == 1) {
-                        // Only log the first failure
                         Serial.println("✗ Cloud unreachable. Retrying silently...");
                     } else if (cloudFailCount % 6 == 0) {
-                        // Reminder every ~60 seconds
                         Serial.println("✗ Cloud still unreachable (" + String(cloudFailCount) + " attempts).");
                     }
                     statusLED.setPattern(LEDPattern::SOLID);

@@ -28,13 +28,32 @@ def save_user_profile(sender, instance, **kwargs):
         instance.profile.save()
 
 
+class CentralControlUnit(models.Model):
+    """ESP32 Central Control Unit — links a physical CCU to a user account"""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='ccus')
+    ccu_id = models.CharField(max_length=10, unique=True, help_text="CCU device ID, e.g. '01'")
+    name = models.CharField(max_length=100, default='My CCU')
+    location = models.CharField(max_length=100, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Central Control Unit'
+        verbose_name_plural = 'Central Control Units'
+
+    def __str__(self):
+        return f"{self.name} (ID: {self.ccu_id}) — {self.user.username}"
+
+
 class Outlet(models.Model):
-    """Smart Outlet Device Model"""
+    """Smart Outlet Device Model — matches CCU firmware OutletDevice"""
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='outlets')
     name = models.CharField(max_length=100)
-    device_id = models.CharField(max_length=50, unique=True)
+    device_id = models.CharField(max_length=10, unique=True, help_text="Hex device ID, e.g. 'FE'")
     location = models.CharField(max_length=100, blank=True)
-    is_active = models.BooleanField(default=False)  # ON/OFF status
+    relay_a = models.BooleanField(default=False, help_text="Socket A relay state (ON/OFF)")
+    relay_b = models.BooleanField(default=False, help_text="Socket B relay state (ON/OFF)")
+    threshold = models.IntegerField(default=0, help_text="Current threshold in mA")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -46,13 +65,16 @@ class Outlet(models.Model):
 
 
 class SensorData(models.Model):
-    """Sensor readings from ESP32"""
+    """
+    Current readings from Smart Outlets via CCU.
+    
+    Each PIC16F88 outlet reports current per socket (A/B) in mA.
+    A reading of 0xFFFF indicates an overload trip.
+    """
     outlet = models.ForeignKey(Outlet, on_delete=models.CASCADE, related_name='sensor_data')
-    voltage = models.FloatField(help_text="Voltage in Volts (V)")
-    current = models.FloatField(help_text="Current in Amperes (A)")
-    power = models.FloatField(help_text="Power in Watts (W)")
-    energy = models.FloatField(default=0, help_text="Energy consumed in kWh")
-    temperature = models.FloatField(null=True, blank=True, help_text="Temperature in Celsius")
+    current_a = models.IntegerField(default=0, help_text="Socket A current in mA")
+    current_b = models.IntegerField(default=0, help_text="Socket B current in mA")
+    is_overload = models.BooleanField(default=False, help_text="True if 0xFFFF overload trip detected")
     timestamp = models.DateTimeField(auto_now_add=True)
     
     class Meta:
@@ -64,13 +86,29 @@ class SensorData(models.Model):
     
     def __str__(self):
         return f"{self.outlet.name} - {self.timestamp.strftime('%Y-%m-%d %H:%M:%S')}"
-    
-    @property
-    def power_factor(self):
-        """Calculate power factor"""
-        if self.voltage and self.current and self.voltage * self.current > 0:
-            return self.power / (self.voltage * self.current)
-        return 0
+
+
+class MainBreakerReading(models.Model):
+    """
+    Total load current from SCT-013 sensor on the main breaker wire.
+    Read directly by ESP32 ADC — independent of smart outlet data.
+    """
+    ccu_id = models.CharField(max_length=10, help_text="CCU sender ID, e.g. '01'")
+    ccu_device = models.ForeignKey(CentralControlUnit, null=True, blank=True,
+                            on_delete=models.SET_NULL, related_name='breaker_readings',
+                            help_text="Linked CCU device (auto-set from ccu_id)")
+    current_ma = models.IntegerField(help_text="Total load current in mA from SCT sensor")
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['-timestamp']),
+            models.Index(fields=['ccu_id', '-timestamp']),
+        ]
+
+    def __str__(self):
+        return f"Breaker [{self.ccu_id}] {self.current_ma}mA @ {self.timestamp.strftime('%Y-%m-%d %H:%M:%S')}"
 
 
 class OutletSchedule(models.Model):
@@ -89,9 +127,8 @@ class OutletSchedule(models.Model):
 class Alert(models.Model):
     """Alerts for abnormal conditions"""
     ALERT_TYPES = [
-        ('high_power', 'High Power Consumption'),
-        ('high_temp', 'High Temperature'),
-        ('voltage_spike', 'Voltage Spike'),
+        ('overload', 'Overload Trip'),
+        ('threshold', 'Threshold Exceeded'),
         ('offline', 'Device Offline'),
     ]
     
@@ -108,135 +145,30 @@ class Alert(models.Model):
         return f"{self.get_alert_type_display()} - {self.outlet.name}"
 
 
-# ==========================================
-# TESTING & CALIBRATION DASHBOARD MODELS
-# ==========================================
-
 class PendingCommand(models.Model):
     """
-    Original Queue for commands (Shared table - DO NOT DELETE)
+    Commands queued from the Online UI for the CCU to pick up via polling.
+    
+    The CCU periodically GETs /api/commands/<device_id>/ to fetch and execute
+    pending commands, then marks them as executed.
     """
+    COMMAND_CHOICES = [
+        ('relay_on', 'Relay ON'),
+        ('relay_off', 'Relay OFF'),
+        ('set_threshold', 'Set Threshold'),
+        ('read_sensors', 'Read Sensors'),
+        ('ping', 'Ping'),
+    ]
+    
+    outlet = models.ForeignKey(Outlet, on_delete=models.CASCADE, related_name='pending_commands')
+    command = models.CharField(max_length=20, choices=COMMAND_CHOICES)
+    socket = models.CharField(max_length=1, blank=True, help_text="'a', 'b', or '' for device-level commands")
+    value = models.IntegerField(null=True, blank=True, help_text="For threshold values (mA)")
     created_at = models.DateTimeField(auto_now_add=True)
-    command_type = models.CharField(max_length=50, help_text="e.g., ADD_DEVICE, SET_MASTER_ID, CUT_POWER")
-    target_id = models.CharField(max_length=50, null=True, blank=True, help_text="e.g., 0xFE, NULL for broadcast")
-    payload = models.JSONField(help_text="Any extra command parameters")
-    is_delivered = models.BooleanField(default=False)
-    delivered_at = models.DateTimeField(null=True, blank=True)
-
+    is_executed = models.BooleanField(default=False)
+    
     class Meta:
         ordering = ['created_at']
-        managed = False
-        db_table = 'outlets_pendingcommand'
-
-class CCUCommandQueue(models.Model):
-    """
-    Isolated Queue for ESP32 commands (Our dedicated table)
-    """
-    created_at = models.DateTimeField(auto_now_add=True)
-    command_type = models.CharField(max_length=50, help_text="e.g., ADD_DEVICE, SET_MASTER_ID, CUT_POWER")
-    target_id = models.CharField(max_length=50, null=True, blank=True, help_text="e.g., 0xFE, NULL for broadcast")
-    payload = models.JSONField(help_text="Any extra command parameters")
     
-    # Has the ESP32 picked this up yet?
-    is_delivered = models.BooleanField(default=False)
-    delivered_at = models.DateTimeField(null=True, blank=True)
-
-    class Meta:
-        ordering = ['created_at']
-        db_table = 'ccu_command_queue'
-
-class SmartOutletDevice(models.Model):
-    """
-    Persistent record of a paired Smart Outlet.
-    Ensures devices appear on the dashboard even when no telemetry is actively streaming.
-    """
-    device_id = models.CharField(max_length=10, unique=True, help_text="Hex ID e.g., 0xFE")
-    name = models.CharField(max_length=100, default="Smart Outlet")
-    limit_mA = models.IntegerField(default=5000)
-    
-    # Cache the latest telemetry state so the card doesn't show 0mA when it first boots
-    last_socket_a_state = models.BooleanField(default=False)
-    last_socket_a_mA = models.IntegerField(default=0)
-    last_socket_b_state = models.BooleanField(default=False)
-    last_socket_b_mA = models.IntegerField(default=0)
-    
-    created_at = models.DateTimeField(auto_now_add=True)
-    last_seen = models.DateTimeField(auto_now=True)
-    
-    class Meta:
-        db_table = 'outlets_smartoutletdevice'
-        ordering = ['device_id']
-
     def __str__(self):
-        return f"{self.name} ({self.device_id})"
-
-class TestTelemetryLog(models.Model):
-    """
-    Append-only ledger for storing raw telemetry data from the ESP32 CCU.
-    Used for calibration and academic logging.
-    """
-    timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
-    
-    # Main System Readings (CCU)
-    main_breaker_mA = models.IntegerField(help_text="Total system current in mA")
-    main_breaker_limit_mA = models.IntegerField(help_text="Active overload limit for main breaker")
-    
-    # Specific Device Readings (Smart Outlet)
-    device_id = models.CharField(max_length=50, help_text="Hex ID of the PIC device (e.g. 0xFE)")
-    device_limit_mA = models.IntegerField(help_text="Overload limit for this specific device")
-    
-    # Socket A State
-    socket_a_state = models.BooleanField(help_text="Is Socket A ON (True) or OFF (False)")
-    socket_a_mA = models.IntegerField(help_text="Current draw at Socket A in mA (-1 if offline)")
-    
-    # Socket B State
-    socket_b_state = models.BooleanField(help_text="Is Socket B ON (True) or OFF (False)")
-    socket_b_mA = models.IntegerField(help_text="Current draw at Socket B in mA (-1 if offline)")
-
-    class Meta:
-        ordering = ['-timestamp']
-        indexes = [
-            models.Index(fields=['-timestamp']),
-            models.Index(fields=['device_id', '-timestamp']),
-        ]
-
-    def __str__(self):
-        return f"[{self.timestamp.strftime('%H:%M:%S')}] {self.device_id} | Main: {self.main_breaker_mA}mA"
-
-
-class TestEventLog(models.Model):
-    """
-    Append-only ledger for recording physical and digital actions for testing.
-    """
-    # Allowed Action Types
-    ACTION_CHOICES = [
-        ('TOGGLE_RELAY', 'Toggle Relay'),
-        ('SET_THRESHOLD', 'Set Threshold'),
-        ('SET_MASTER_ID', 'Set Master ID'),
-        ('ADD_DEVICE', 'Add Device'),
-        ('DELETE_DEVICE', 'Delete Device'),
-        ('OVERLOAD_TRIPPED', 'Overload Tripped'),
-        ('ACK_RECEIVED', 'Command Acknowledged'),
-        ('SYSTEM_BOOT', 'System Boot'),
-        ('SYSTEM_CLEARED', 'System Cleared'),
-    ]
-
-    # Allowed Sources
-    SOURCE_CHOICES = [
-        ('WEB_DASHBOARD', 'Web Dashboard'),
-        ('ESP32_AUTO_CUT', 'ESP32 Auto Cutoff'),
-        ('PIC_HARDWARE', 'PIC Hardware Button'),
-        ('ESP32_SYSTEM', 'ESP32 System Logic')
-    ]
-
-    timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
-    source = models.CharField(max_length=50, choices=SOURCE_CHOICES)
-    action_type = models.CharField(max_length=50, choices=ACTION_CHOICES)
-    target_device = models.CharField(max_length=50, help_text="e.g. 0xFE, Main Breaker, or All Devices")
-    details = models.TextField(help_text="Plain English explanation of the event")
-
-    class Meta:
-        ordering = ['-timestamp']
-
-    def __str__(self):
-        return f"[{self.timestamp.strftime('%H:%M:%S')}] {self.action_type} -> {self.target_device}"
+        return f"{self.command} → {self.outlet.name} ({self.created_at.strftime('%H:%M:%S')})"

@@ -14,13 +14,14 @@ urlpatterns = [
     
     # Dashboard (for later use)
     path('dashboard/', views.dashboard, name='dashboard'),
+
+    # Outlet management — 'add' must come before '<str:device_id>' wildcard
+    path('outlet/add/', views.add_outlet, name='add_outlet'),
     path('outlet/<str:device_id>/', views.outlet_detail, name='outlet_detail'),
     path('outlet/<str:device_id>/toggle/', views.toggle_outlet, name='toggle_outlet'),
+    path('outlet/<str:device_id>/delete/', views.delete_outlet, name='delete_outlet'),
     
-    # Testing & Calibration Dashboard (Bypass Login)
-    path('test-dashboard/', views.test_dashboard_view, name='test_dashboard'),
-    path('api/test-log/clear/', views.clear_test_logs, name='clear_test_logs'),
-    path('api/test-log/', views.receive_test_log, name='receive_test_log'),
-    path('api/test-command/', views.enqueue_command, name='enqueue_command'),
-    path('api/test-command/fetch/', views.fetch_pending_commands, name='fetch_pending_commands'),
+    # CCU management
+    path('ccu/add/', views.add_ccu, name='add_ccu'),
+    path('ccu/<str:ccu_id>/delete/', views.delete_ccu, name='delete_ccu'),
 ]

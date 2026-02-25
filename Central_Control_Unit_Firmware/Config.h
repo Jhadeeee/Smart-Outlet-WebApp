@@ -1,7 +1,7 @@
 /*
  * Config.h
  * --------
- * Global configuration constants for the CCU Firmware v4.0.0.
+ * Global configuration constants for the CCU Firmware v2.0.0.
  * Modify these values to match your hardware and preferences.
  */
 
@@ -44,12 +44,14 @@
 #define CCU_SENDER_ID    0x01             // Must match PIC's DEFAULT_ID_MASTER
 #define MAX_OUTLETS      8                // Maximum number of smart outlets
 
-// ─── Breaker Monitor (SCT013) ───────────────────────────────
-#define BREAKER_ADC_PIN              34   // ESP32 ADC pin (input-only, no pull-up)
-#define BREAKER_CT_TURNS             2000 // SCT013-100 turns ratio
-#define BREAKER_BURDEN_RESISTOR      23   // Burden resistor in Ohms
-#define BREAKER_LINE_FREQ            60   // Mains frequency (50 or 60 Hz)
-#define BREAKER_DEFAULT_THRESHOLD_MA 15000 // Default overload threshold (15A)
+// ─── SCT-013 Current Sensor (Main Breaker) ─────────────────
+#define SCT_ADC_PIN          34               // ESP32 ADC1 GPIO 34 (input-only)
+#define SCT_VREF             3.3              // ESP32 ADC reference voltage
+#define SCT_ADC_RESOLUTION   4096             // 12-bit ADC
+#define SCT_ADC_MIDPOINT     1862             // ~1.5V bias point (adjust to divider)
+#define SCT_CALIBRATION      60.6             // SCT-013 100A:50mA w/ 33 ohm burden
+#define SCT_SAMPLES          1480             // Samples per measurement (~1 AC cycle)
+#define SCT_READ_INTERVAL_MS 5000             // Read SCT sensor every 5 seconds
 
 // ─── Serial ─────────────────────────────────────────────────
 #define SERIAL_BAUD      115200

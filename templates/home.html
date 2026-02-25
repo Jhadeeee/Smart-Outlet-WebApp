@@ -1,10 +1,13 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Home - Smart Outlet</title>
+    <title>Dashboard - Smart Outlet</title>
+    <meta name="description"
+        content="Smart Outlet Monitoring Dashboard — Real-time current monitoring and relay control">
 
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -27,7 +30,6 @@
             --inactive-gray: #94a3b8;
             --glass-bg: rgba(255, 255, 255, 0.08);
             --glass-border: rgba(255, 255, 255, 0.12);
-            --card-bg: rgba(255, 255, 255, 0.95);
         }
 
         * {
@@ -120,7 +122,7 @@
             }
         }
 
-        /* Navbar */
+        /* ─── Navbar ─── */
         .navbar {
             background: rgba(255, 255, 255, 0.07);
             backdrop-filter: blur(20px);
@@ -130,6 +132,7 @@
             position: sticky;
             top: 0;
             z-index: 100;
+            overflow: visible;
         }
 
         .navbar-brand {
@@ -171,7 +174,7 @@
             background: rgba(255, 255, 255, 0.1);
         }
 
-        /* Main Container */
+        /* ─── Main Container ─── */
         .main-container {
             position: relative;
             z-index: 1;
@@ -179,7 +182,6 @@
             padding-bottom: 110px;
         }
 
-        /* Section Label */
         .section-label {
             color: rgba(255, 255, 255, 0.5);
             font-size: 11px;
@@ -190,16 +192,14 @@
             padding-left: 4px;
         }
 
-        /* Total Load Card */
+        /* ─── Total Load Card ─── */
         .total-load-card {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             border-radius: 20px;
             padding: 28px 30px;
             text-align: center;
             color: white;
-            box-shadow:
-                0 20px 50px rgba(102, 126, 234, 0.25),
-                inset 0 1px 0 rgba(255, 255, 255, 0.15);
+            box-shadow: 0 20px 50px rgba(102, 126, 234, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.15);
             margin-bottom: 16px;
             position: relative;
             overflow: hidden;
@@ -253,7 +253,7 @@
             margin-left: 4px;
         }
 
-        /* Limit Input Bars — Glassmorphism */
+        /* ─── Threshold Bars ─── */
         .limit-bar {
             border-radius: 14px;
             padding: 14px 18px;
@@ -275,7 +275,7 @@
             animation-delay: 0.1s;
         }
 
-        .limit-bar.outlet {
+        .limit-bar.outlet-limit {
             background: rgba(245, 158, 11, 0.85);
             color: #1a1a1a;
             animation-delay: 0.15s;
@@ -288,7 +288,7 @@
             letter-spacing: 0.2px;
         }
 
-        .limit-bar .input-group {
+        .limit-bar .input-group-custom {
             display: flex;
             align-items: center;
             gap: 8px;
@@ -338,11 +338,7 @@
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
         }
 
-        .limit-bar .btn-save:active {
-            transform: translateY(0);
-        }
-
-        /* Status Badges */
+        /* ─── Status Badges ─── */
         .status-badges {
             display: flex;
             justify-content: center;
@@ -391,7 +387,7 @@
             background: var(--inactive-gray);
         }
 
-        /* Outlet List */
+        /* ─── Outlet Cards ─── */
         .outlet-list {
             display: flex;
             flex-direction: column;
@@ -405,23 +401,10 @@
             border: 1px solid var(--glass-border);
             border-radius: 16px;
             padding: 18px 22px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             animation: fadeInUp 0.5s ease-out backwards;
-        }
-
-        .outlet-card:nth-child(1) {
-            animation-delay: 0.25s;
-        }
-
-        .outlet-card:nth-child(2) {
-            animation-delay: 0.3s;
-        }
-
-        .outlet-card:nth-child(3) {
-            animation-delay: 0.35s;
+            text-decoration: none;
+            display: block;
         }
 
         .outlet-card:hover {
@@ -429,6 +412,13 @@
             border-color: rgba(255, 255, 255, 0.2);
             transform: translateY(-2px);
             box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        .outlet-card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 14px;
         }
 
         .outlet-info {
@@ -447,6 +437,13 @@
             justify-content: center;
             color: var(--primary-purple);
             font-size: 16px;
+            flex-shrink: 0;
+        }
+
+        .outlet-icon.overload {
+            background: rgba(239, 68, 68, 0.2);
+            color: var(--danger-red);
+            animation: pulse-glow 1.5s ease-in-out infinite;
         }
 
         .outlet-name {
@@ -461,98 +458,336 @@
             margin-top: 2px;
         }
 
-        .outlet-actions {
+        .outlet-device-id {
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.3);
+            font-family: monospace;
+        }
+
+        /* ─── Socket Row ─── */
+        .socket-row {
+            display: flex;
+            gap: 10px;
+            margin-top: 4px;
+        }
+
+        .socket-card {
+            flex: 1;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            padding: 12px 14px;
             display: flex;
             align-items: center;
-            gap: 12px;
+            justify-content: space-between;
         }
 
-        .status-indicator {
-            width: 10px;
-            height: 10px;
+        .socket-info {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .socket-label {
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.4);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .socket-current {
+            font-size: 18px;
+            font-weight: 700;
+            color: white;
+        }
+
+        .socket-current .unit {
+            font-size: 12px;
+            font-weight: 500;
+            opacity: 0.6;
+            margin-left: 2px;
+        }
+
+        /* ─── Toggle Switch ─── */
+        .toggle-switch {
+            position: relative;
+            width: 44px;
+            height: 24px;
+            flex-shrink: 0;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(148, 163, 184, 0.4);
+            border-radius: 24px;
+            transition: 0.3s;
+        }
+
+        .toggle-slider::before {
+            content: '';
+            position: absolute;
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background: white;
             border-radius: 50%;
+            transition: 0.3s;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
         }
 
-        .status-indicator.online {
+        .toggle-switch input:checked+.toggle-slider {
             background: var(--success-green);
-            color: var(--success-green);
-            animation: pulse-glow 2s ease-in-out infinite;
+            box-shadow: 0 0 8px rgba(34, 197, 94, 0.4);
         }
 
-        .status-indicator.warning {
-            background: var(--warning-yellow);
-            color: var(--warning-yellow);
-            animation: pulse-glow 1.5s ease-in-out infinite;
+        .toggle-switch input:checked+.toggle-slider::before {
+            transform: translateX(20px);
         }
 
-        .status-indicator.offline {
-            background: var(--inactive-gray);
+        /* ─── No Outlets Empty State ─── */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            animation: fadeInUp 0.5s ease-out 0.3s backwards;
         }
 
-        .btn-edit {
-            background: rgba(255, 255, 255, 0.08);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+        .empty-state i {
+            font-size: 48px;
+            color: rgba(255, 255, 255, 0.15);
+            margin-bottom: 16px;
+        }
+
+        .empty-state h3 {
             color: rgba(255, 255, 255, 0.5);
+            font-size: 16px;
+            font-weight: 500;
+            margin-bottom: 8px;
+        }
+
+        .empty-state p {
+            color: rgba(255, 255, 255, 0.3);
+            font-size: 13px;
+        }
+
+        /* ─── Add Outlet Button (in section header) ─── */
+        .section-label {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .btn-add-outlet {
+            padding: 6px 14px;
+            background: rgba(124, 92, 191, 0.2);
+            border: 1px dashed rgba(124, 92, 191, 0.5);
+            border-radius: 8px;
+            color: var(--accent-purple);
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-add-outlet:hover {
+            background: rgba(124, 92, 191, 0.35);
+            border-color: var(--accent-purple);
+        }
+
+        /* ─── Add Outlet Button (empty state) ─── */
+        .btn-add-first {
+            margin-top: 16px;
+            padding: 12px 28px;
+            background: linear-gradient(135deg, var(--accent-purple), var(--accent-pink));
+            border: none;
+            border-radius: 12px;
+            color: #fff;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            animation: fadeInUp 0.5s ease-out 0.5s backwards;
+        }
+
+        .btn-add-first:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(124, 92, 191, 0.4);
+        }
+
+        /* ─── Delete Outlet Button ─── */
+        .btn-delete-outlet {
+            background: none;
+            border: none;
+            color: rgba(255, 255, 255, 0.25);
             font-size: 14px;
             cursor: pointer;
-            padding: 8px;
-            width: 34px;
-            height: 34px;
+            padding: 6px 8px;
+            border-radius: 6px;
+            transition: all 0.2s;
+        }
+
+        .btn-delete-outlet:hover {
+            color: var(--danger-red);
+            background: rgba(233, 69, 96, 0.15);
+        }
+
+        /* ─── Modal Overlay ─── */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.65);
+            backdrop-filter: blur(4px);
+            z-index: 10000;
             display: flex;
             align-items: center;
             justify-content: center;
-            border-radius: 10px;
-            transition: all 0.25s;
         }
 
-        .btn-edit:hover {
-            color: white;
-            background: rgba(102, 126, 234, 0.3);
-            border-color: rgba(102, 126, 234, 0.4);
+        .modal-card {
+            background: linear-gradient(135deg, #1a1a3e, #252555);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 18px;
+            padding: 28px;
+            width: 90%;
+            max-width: 400px;
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+            animation: fadeInUp 0.25s ease-out;
         }
 
-        /* Floating AI Button */
-        .floating-ai-btn {
-            position: fixed;
-            bottom: 25px;
-            right: 25px;
-            background: linear-gradient(135deg, var(--primary-purple) 0%, var(--secondary-purple) 100%);
-            color: white;
-            border: none;
-            border-radius: 50px;
-            padding: 14px 24px;
+        .modal-card h3 {
+            color: rgba(255, 255, 255, 0.95);
+            font-size: 18px;
             font-weight: 600;
+            margin-bottom: 20px;
+        }
+
+        .modal-card h3 i {
+            color: var(--primary-purple);
+            margin-right: 8px;
+        }
+
+        .modal-field {
+            margin-bottom: 14px;
+        }
+
+        .modal-field label {
+            display: block;
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 12px;
+            font-weight: 500;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .modal-field input {
+            width: 100%;
+            padding: 10px 14px;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 10px;
+            color: #fff;
             font-size: 14px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .modal-field input:focus {
+            border-color: var(--primary-purple);
+        }
+
+        .modal-field input::placeholder {
+            color: rgba(255, 255, 255, 0.25);
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .btn-modal-cancel {
+            flex: 1;
+            padding: 11px;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 10px;
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-modal-cancel:hover {
+            background: rgba(255, 255, 255, 0.12);
+        }
+
+        .btn-modal-save {
+            flex: 1;
+            padding: 11px;
+            background: linear-gradient(135deg, var(--primary-purple), var(--secondary-purple));
+            border: none;
+            border-radius: 10px;
+            color: #fff;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-modal-save:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        /* ─── Alerts Toast ─── */
+        .toast-container {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            z-index: 9999;
+        }
+
+        .alert-toast {
+            background: rgba(30, 30, 50, 0.95);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            padding: 14px 18px;
+            color: white;
+            font-size: 13px;
+            margin-bottom: 8px;
             display: flex;
             align-items: center;
             gap: 10px;
-            box-shadow:
-                0 8px 24px rgba(102, 126, 234, 0.35),
-                0 0 0 1px rgba(102, 126, 234, 0.2);
-            cursor: pointer;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            text-decoration: none;
-            z-index: 1000;
-            animation: fadeInUp 0.6s ease-out 0.5s backwards;
+            animation: fadeInUp 0.3s ease-out;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
         }
 
-        .floating-ai-btn:hover {
-            transform: translateY(-3px) scale(1.02);
-            box-shadow:
-                0 12px 30px rgba(102, 126, 234, 0.45),
-                0 0 0 1px rgba(102, 126, 234, 0.3);
-            color: white;
+        .alert-toast.success {
+            border-left: 3px solid var(--success-green);
         }
 
-        .floating-ai-btn:active {
-            transform: translateY(-1px) scale(0.99);
+        .alert-toast.error {
+            border-left: 3px solid var(--danger-red);
         }
 
-        .floating-ai-btn i {
-            font-size: 16px;
-        }
-
-        /* Profile Dropdown */
+        /* ─── Profile Dropdown ─── */
         .profile-wrapper {
             position: relative;
         }
@@ -660,7 +895,123 @@
             color: #fca5a5;
         }
 
-        /* Responsive */
+        /* ─── Floating AI Button ─── */
+        .floating-ai-btn {
+            position: fixed;
+            bottom: 25px;
+            right: 25px;
+            background: linear-gradient(135deg, var(--primary-purple) 0%, var(--secondary-purple) 100%);
+            color: white;
+            border: none;
+            border-radius: 50px;
+            padding: 14px 24px;
+            font-weight: 600;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            box-shadow: 0 8px 24px rgba(102, 126, 234, 0.35), 0 0 0 1px rgba(102, 126, 234, 0.2);
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            text-decoration: none;
+            z-index: 1000;
+            animation: fadeInUp 0.6s ease-out 0.5s backwards;
+        }
+
+        .floating-ai-btn:hover {
+            transform: translateY(-3px) scale(1.02);
+            box-shadow: 0 12px 30px rgba(102, 126, 234, 0.45), 0 0 0 1px rgba(102, 126, 234, 0.3);
+            color: white;
+        }
+
+        .floating-ai-btn i {
+            font-size: 16px;
+        }
+
+        /* ─── CCU Cards ─── */
+        .ccu-card {
+            background: rgba(255, 255, 255, 0.07);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--glass-border);
+            border-radius: 14px;
+            padding: 14px 18px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            animation: fadeInUp 0.5s ease-out backwards;
+        }
+
+        .ccu-card:hover {
+            background: rgba(255, 255, 255, 0.12);
+        }
+
+        .ccu-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .ccu-icon {
+            width: 38px;
+            height: 38px;
+            background: rgba(34, 197, 94, 0.15);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--success-green);
+            font-size: 15px;
+            flex-shrink: 0;
+        }
+
+        .ccu-name {
+            font-weight: 600;
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        .ccu-detail {
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.35);
+            font-family: monospace;
+            margin-top: 2px;
+        }
+
+        .btn-delete-ccu {
+            background: none;
+            border: none;
+            color: rgba(255, 255, 255, 0.25);
+            font-size: 13px;
+            cursor: pointer;
+            padding: 5px 7px;
+            border-radius: 6px;
+            transition: all 0.2s;
+        }
+
+        .btn-delete-ccu:hover {
+            color: var(--danger-red);
+            background: rgba(233, 69, 96, 0.15);
+        }
+
+        .btn-add-ccu {
+            padding: 6px 14px;
+            background: rgba(34, 197, 94, 0.15);
+            border: 1px dashed rgba(34, 197, 94, 0.4);
+            border-radius: 8px;
+            color: var(--success-green);
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-add-ccu:hover {
+            background: rgba(34, 197, 94, 0.25);
+            border-color: var(--success-green);
+        }
+
+        /* ─── Responsive ─── */
         @media (max-width: 576px) {
             .navbar-brand {
                 font-size: 16px;
@@ -697,6 +1048,10 @@
                 font-size: 14px;
             }
 
+            .socket-row {
+                flex-direction: column;
+            }
+
             .floating-ai-btn {
                 bottom: 20px;
                 right: 20px;
@@ -708,11 +1063,14 @@
 </head>
 
 <body>
+    <!-- Toast Container -->
+    <div class="toast-container" id="toastContainer"></div>
+
     <!-- Navbar -->
     <nav class="navbar">
         <div class="container-fluid">
             <a class="navbar-brand" href="{% url 'outlets:home' %}">
-                <i class="fas fa-bolt me-2"></i>Home
+                <i class="fas fa-bolt me-2"></i>Smart Outlet
             </a>
             <div class="navbar-icons">
                 <a href="#" title="Notifications"><i class="fas fa-bell"></i></a>
@@ -731,13 +1089,9 @@
                             <p class="profile-email">{{ user.email|default:"No email set" }}</p>
                         </div>
                         <div class="profile-menu">
-                            <a href="{% url 'outlets:dashboard' %}" class="profile-menu-item">
-                                <i class="fas fa-chart-line"></i>
-                                <span>Dashboard</span>
-                            </a>
                             <a href="/admin/" class="profile-menu-item">
                                 <i class="fas fa-cog"></i>
-                                <span>Settings</span>
+                                <span>Admin Panel</span>
                             </a>
                             <a href="{% url 'outlets:logout' %}" class="profile-menu-item logout">
                                 <i class="fas fa-sign-out-alt"></i>
@@ -760,83 +1114,243 @@
                     <div class="section-label">System Overview</div>
                     <div class="total-load-card">
                         <div class="total-load-label">Total Load Current</div>
-                        <div class="total-load-value">8.6<span class="total-load-unit">A</span></div>
-                    </div>
-
-                    <!-- Breaker Amps Limit -->
-                    <div class="limit-bar breaker">
-                        <label><i class="fas fa-shield-halved me-2"></i>Breaker Amps Limit:</label>
-                        <div class="input-group">
-                            <input type="number" value="15" min="1" max="100">
-                            <span class="unit">A</span>
-                            <button class="btn-save">Save</button>
-                        </div>
-                    </div>
-
-                    <!-- Outlet Amps Limit -->
-                    <div class="limit-bar outlet">
-                        <label><i class="fas fa-plug me-2"></i>Outlet Amps Limit:</label>
-                        <div class="input-group">
-                            <input type="number" value="5" min="1" max="50">
-                            <span class="unit">A</span>
-                            <button class="btn-save">Save</button>
+                        <div class="total-load-value" id="totalCurrent">
+                            {{ total_current_amps }}<span class="total-load-unit">A</span>
                         </div>
                     </div>
 
                     <!-- Status Badges -->
                     <div class="status-badges">
-                        <span class="status-badge active">Active: 2</span>
-                        <span class="status-badge inactive">Inactive: 1</span>
+                        <span class="status-badge active">Active: {{ active_count }}</span>
+                        <span class="status-badge inactive">Inactive: {{ inactive_count }}</span>
                     </div>
 
+                    <!-- Registered CCUs -->
+                    <div class="section-label">
+                        My CCU (ESP32)
+                        <button class="btn-add-ccu"
+                            onclick="document.getElementById('addCcuModal').style.display='flex'">
+                            <i class="fas fa-plus"></i> Add CCU
+                        </button>
+                    </div>
+
+                    {% if user_ccus %}
+                    {% for ccu in user_ccus %}
+                    <div class="ccu-card" style="animation-delay: {{ forloop.counter0 }}00ms">
+                        <div class="ccu-info">
+                            <div class="ccu-icon">
+                                <i class="fas fa-microchip"></i>
+                            </div>
+                            <div>
+                                <div class="ccu-name">{{ ccu.name }}</div>
+                                <div class="ccu-detail">
+                                    ID: {{ ccu.ccu_id }}
+                                    {% if ccu.location %} · {{ ccu.location }}{% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        <form method="post" action="{% url 'outlets:delete_ccu' ccu.ccu_id %}"
+                            onsubmit="return confirm('Remove CCU {{ ccu.name }}?')" style="margin:0">
+                            {% csrf_token %}
+                            <button type="submit" class="btn-delete-ccu" title="Remove CCU">
+                                <i class="fas fa-trash-alt"></i>
+                            </button>
+                        </form>
+                    </div>
+                    {% endfor %}
+                    {% else %}
+                    <div class="ccu-card">
+                        <div class="ccu-info">
+                            <div class="ccu-icon"
+                                style="background: rgba(148,163,184,0.15); color: var(--inactive-gray)">
+                                <i class="fas fa-microchip"></i>
+                            </div>
+                            <div>
+                                <div class="ccu-name" style="color: rgba(255,255,255,0.4)">No CCU registered</div>
+                                <div class="ccu-detail">Click "Add CCU" to link your ESP32</div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+
                     <!-- Outlet List -->
-                    <div class="section-label">Connected Outlets</div>
-                    <div class="outlet-list">
-                        <div class="outlet-card">
-                            <div class="outlet-info">
-                                <div class="outlet-icon"><i class="fas fa-plug"></i></div>
-                                <div>
-                                    <div class="outlet-name">Room 1 outlet</div>
-                                    <div class="outlet-subtitle">3.2 A · Active</div>
-                                </div>
-                            </div>
-                            <div class="outlet-actions">
-                                <span class="status-indicator online"></span>
-                                <button class="btn-edit" title="Edit"><i class="fas fa-pen"></i></button>
-                            </div>
-                        </div>
+                    <div class="section-label">
+                        Connected Outlets ({{ outlet_count }})
+                        {% if outlet_data %}
+                        <button class="btn-add-outlet"
+                            onclick="document.getElementById('addOutletModal').style.display='flex'">
+                            <i class="fas fa-plus"></i> Add Outlet
+                        </button>
+                        {% endif %}
+                    </div>
+                    <div class="outlet-list" id="outletList">
 
-                        <div class="outlet-card">
-                            <div class="outlet-info">
-                                <div class="outlet-icon"><i class="fas fa-plug"></i></div>
-                                <div>
-                                    <div class="outlet-name">Room 2 outlet</div>
-                                    <div class="outlet-subtitle">5.4 A · Warning</div>
-                                </div>
-                            </div>
-                            <div class="outlet-actions">
-                                <span class="status-indicator warning"></span>
-                                <button class="btn-edit" title="Edit"><i class="fas fa-pen"></i></button>
-                            </div>
-                        </div>
+                        {% if outlet_data %}
+                        {% for item in outlet_data %}
+                        {% with delay=forloop.counter0 %}
+                        <div class="outlet-card" id="outlet-{{ item.outlet.device_id }}"
+                            style="animation-delay: 0.{{ delay }}s">
 
-                        <div class="outlet-card">
-                            <div class="outlet-info">
-                                <div class="outlet-icon"><i class="fas fa-plug"></i></div>
-                                <div>
-                                    <div class="outlet-name">Kitchen outlet</div>
-                                    <div class="outlet-subtitle">0.0 A · Inactive</div>
+                            <div class="outlet-card-header">
+                                <div class="outlet-info">
+                                    <div class="outlet-icon {% if item.is_overload %}overload{% endif %}">
+                                        <i class="fas fa-plug"></i>
+                                    </div>
+                                    <div>
+                                        <div class="outlet-name">{{ item.outlet.name }}</div>
+                                        <div class="outlet-subtitle">
+                                            {{ item.total_amps }} A ·
+                                            {% if item.is_overload %}
+                                            <span style="color: var(--danger-red)">OVERLOAD</span>
+                                            {% elif item.outlet.relay_a or item.outlet.relay_b %}
+                                            Active
+                                            {% else %}
+                                            Inactive
+                                            {% endif %}
+                                        </div>
+                                        <div class="outlet-device-id">
+                                            ID: 0x{{ item.outlet.device_id }}
+                                            {% if item.outlet.location %}
+                                            · {{ item.outlet.location }}
+                                            {% endif %}
+                                            {% if item.outlet.threshold %}
+                                            · Limit: {{ item.outlet.threshold }}mA
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+                                <form method="post" action="{% url 'outlets:delete_outlet' item.outlet.device_id %}"
+                                    onsubmit="return confirm('Remove {{ item.outlet.name }}?')" style="margin:0">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn-delete-outlet" title="Remove outlet">
+                                        <i class="fas fa-trash-alt"></i>
+                                    </button>
+                                </form>
+                            </div>
+
+                            <!-- Per-Socket Controls -->
+                            <div class="socket-row">
+                                <!-- Socket A -->
+                                <div class="socket-card">
+                                    <div class="socket-info">
+                                        <span class="socket-label">Socket A</span>
+                                        <span class="socket-current" id="cur-a-{{ item.outlet.device_id }}">
+                                            {{ item.current_a_amps }}<span class="unit">A</span>
+                                        </span>
+                                    </div>
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" {% if item.outlet.relay_a %}checked{% endif %}
+                                            onchange="toggleRelay('{{ item.outlet.device_id }}', 'a', this.checked)">
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </div>
+
+                                <!-- Socket B -->
+                                <div class="socket-card">
+                                    <div class="socket-info">
+                                        <span class="socket-label">Socket B</span>
+                                        <span class="socket-current" id="cur-b-{{ item.outlet.device_id }}">
+                                            {{ item.current_b_amps }}<span class="unit">A</span>
+                                        </span>
+                                    </div>
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" {% if item.outlet.relay_b %}checked{% endif %}
+                                            onchange="toggleRelay('{{ item.outlet.device_id }}', 'b', this.checked)">
+                                        <span class="toggle-slider"></span>
+                                    </label>
                                 </div>
                             </div>
-                            <div class="outlet-actions">
-                                <span class="status-indicator online"></span>
-                                <button class="btn-edit" title="Edit"><i class="fas fa-pen"></i></button>
-                            </div>
                         </div>
+                        {% endwith %}
+                        {% endfor %}
+                        {% else %}
+                        <div class="empty-state">
+                            <i class="fas fa-plug"></i>
+                            <h3>No outlets registered yet</h3>
+                            <p>Add your Smart Outlet devices to start monitoring.</p>
+                            <button class="btn-add-first"
+                                onclick="document.getElementById('addOutletModal').style.display='flex'">
+                                <i class="fas fa-plus"></i> Add Outlet
+                            </button>
+                        </div>
+                        {% endif %}
                     </div>
 
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- Add Outlet Modal -->
+    <div class="modal-overlay" id="addOutletModal" style="display:none">
+        <div class="modal-card">
+            <h3><i class="fas fa-plug"></i> Add New Outlet</h3>
+            <form method="post" action="{% url 'outlets:add_outlet' %}">
+                {% csrf_token %}
+                <div class="modal-field">
+                    <label>Outlet Name</label>
+                    <input type="text" name="name" placeholder="e.g. Living Room Outlet" required>
+                </div>
+                <div class="modal-field">
+                    <label>Device ID (Hex)</label>
+                    <div style="display:flex;align-items:center;gap:6px">
+                        <span style="color:var(--accent-purple);font-weight:600">0x</span>
+                        <input type="text" name="device_id" placeholder="FE" maxlength="2" required
+                            style="width:70px;text-transform:uppercase;text-align:center">
+                    </div>
+                    <small style="color:var(--muted-text);font-size:11px">
+                        Must match the PIC Device ID programmed in your Smart Outlet
+                    </small>
+                </div>
+                <div class="modal-field">
+                    <label>Location (optional)</label>
+                    <input type="text" name="location" placeholder="e.g. Bedroom, Kitchen">
+                </div>
+                <div class="modal-buttons">
+                    <button type="button" class="btn-modal-cancel"
+                        onclick="document.getElementById('addOutletModal').style.display='none'">
+                        Cancel
+                    </button>
+                    <button type="submit" class="btn-modal-save">
+                        <i class="fas fa-plus"></i> Add Outlet
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Add CCU Modal -->
+    <div class="modal-overlay" id="addCcuModal" style="display:none">
+        <div class="modal-card">
+            <h3><i class="fas fa-microchip"></i> Register CCU (ESP32)</h3>
+            <form method="post" action="{% url 'outlets:add_ccu' %}">
+                {% csrf_token %}
+                <div class="modal-field">
+                    <label>CCU Name</label>
+                    <input type="text" name="name" placeholder="e.g. Main Hub" value="My CCU">
+                </div>
+                <div class="modal-field">
+                    <label>CCU ID</label>
+                    <input type="text" name="ccu_id" placeholder="e.g. 01" maxlength="10" required
+                        style="text-transform:uppercase">
+                    <small style="color:rgba(255,255,255,0.35);font-size:11px">
+                        Must match the CCU ID programmed in your ESP32 firmware
+                    </small>
+                </div>
+                <div class="modal-field">
+                    <label>Location (optional)</label>
+                    <input type="text" name="location" placeholder="e.g. Living Room">
+                </div>
+                <div class="modal-buttons">
+                    <button type="button" class="btn-modal-cancel"
+                        onclick="document.getElementById('addCcuModal').style.display='none'">
+                        Cancel
+                    </button>
+                    <button type="submit" class="btn-modal-save">
+                        <i class="fas fa-plus"></i> Register CCU
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 
@@ -849,30 +1363,154 @@
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
-    <!-- Profile Dropdown Script -->
     <script>
+        // ─── CSRF Token ───
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+
+        // ─── Toast Notification ───
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = `alert-toast ${type}`;
+            const icon = type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle';
+            toast.innerHTML = `<i class="fas ${icon}"></i> ${message}`;
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateY(-10px)';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        // ─── Toggle Relay ───
+        async function toggleRelay(deviceId, socket, state) {
+            try {
+                const formData = new FormData();
+                formData.append('socket', socket);
+
+                const response = await fetch(`/outlet/${deviceId}/toggle/`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': getCookie('csrftoken'),
+                    },
+                    body: formData,
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showToast(data.message, 'success');
+                } else {
+                    showToast(data.message || 'Failed to toggle relay', 'error');
+                }
+            } catch (error) {
+                showToast('Network error. Please try again.', 'error');
+            }
+        }
+
+        // ─── Profile Dropdown ───
         const profileBtn = document.getElementById('profileBtn');
         const profileDropdown = document.getElementById('profileDropdown');
 
-        // Toggle dropdown on click
-        profileBtn.addEventListener('click', function (e) {
-            e.stopPropagation();
-            profileDropdown.classList.toggle('show');
-        });
+        if (profileBtn && profileDropdown) {
+            profileBtn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                profileDropdown.classList.toggle('show');
+            });
 
-        // Close dropdown when clicking outside
-        document.addEventListener('click', function (e) {
-            if (!profileDropdown.contains(e.target) && !profileBtn.contains(e.target)) {
-                profileDropdown.classList.remove('show');
-            }
-        });
+            document.addEventListener('click', function (e) {
+                if (!profileDropdown.contains(e.target) && !profileBtn.contains(e.target)) {
+                    profileDropdown.classList.remove('show');
+                }
+            });
 
-        // Close dropdown on escape key
-        document.addEventListener('keydown', function (e) {
-            if (e.key === 'Escape') {
-                profileDropdown.classList.remove('show');
-            }
-        });
+            document.addEventListener('keydown', function (e) {
+                if (e.key === 'Escape') profileDropdown.classList.remove('show');
+            });
+        }
+
+
+        // ─── WebSocket Connections ───
+        function connectWebSocket(deviceId, isBreaker = false) {
+            const wsScheme = window.location.protocol === "https:" ? "wss" : "ws";
+            const wsPath = isBreaker ? `/ws/breaker/${deviceId}/` : `/ws/sensor/${deviceId}/`;
+            const ws = new WebSocket(`${wsScheme}://${window.location.host}${wsPath}`);
+
+            ws.onmessage = function (e) {
+                const data = JSON.parse(e.data);
+                if (data.type === 'sensor_data' || data.type === 'initial_data') {
+                    const payload = data.data;
+
+                    if (isBreaker) {
+                        // Update Total Load Current
+                        const totalEl = document.getElementById('totalCurrent');
+                        if (totalEl && payload.current_amps !== undefined) {
+                            totalEl.innerHTML = `${payload.current_amps.toFixed(2)}<span class="total-load-unit">A</span>`;
+                        }
+                    } else {
+                        // Update Outlet Data
+                        const curAEl = document.getElementById(`cur-a-${payload.device_id}`);
+                        const curBEl = document.getElementById(`cur-b-${payload.device_id}`);
+
+                        if (curAEl) curAEl.innerHTML = `${(payload.current_a / 1000.0).toFixed(2)}<span class="unit">A</span>`;
+                        if (curBEl) curBEl.innerHTML = `${(payload.current_b / 1000.0).toFixed(2)}<span class="unit">A</span>`;
+
+                        // Update Outlet subtitle/total amps
+                        const cardEl = document.getElementById(`outlet-${payload.device_id}`);
+                        if (cardEl) {
+                            const subtitleEl = cardEl.querySelector('.outlet-subtitle');
+                            const iconEl = cardEl.querySelector('.outlet-icon');
+
+                            const totalAmps = ((payload.current_a + payload.current_b) / 1000.0).toFixed(2);
+                            let statusText = 'Inactive';
+                            if (payload.is_overload) {
+                                statusText = '<span style="color: var(--danger-red)">OVERLOAD</span>';
+                                iconEl.classList.add('overload');
+                            } else {
+                                statusText = (payload.relay_a || payload.relay_b) ? 'Active' : 'Inactive';
+                                iconEl.classList.remove('overload');
+                            }
+
+                            if (subtitleEl) subtitleEl.innerHTML = `${totalAmps} A · ${statusText}`;
+
+                            // Update toggle switch UI
+                            const toggleA = cardEl.querySelector('input[onchange*="\'a\'"]');
+                            const toggleB = cardEl.querySelector('input[onchange*="\'b\'"]');
+                            if (toggleA) toggleA.checked = payload.relay_a;
+                            if (toggleB) toggleB.checked = payload.relay_b;
+                        }
+                    }
+                }
+            };
+
+            ws.onclose = function (e) {
+                console.log(`WebSocket closed for ${deviceId}. Reconnecting...`);
+                setTimeout(() => connectWebSocket(deviceId, isBreaker), 5000);
+            };
+        }
+
+        // Initialize WebSockets for outlets
+        {% for item in outlet_data %}
+        connectWebSocket('{{ item.outlet.device_id }}');
+        {% endfor %}
+
+        // Initialize Breaker WebSocket — connect to each of user's CCUs
+        {% for ccu in user_ccus %}
+        connectWebSocket('{{ ccu.ccu_id }}', true);
+        {% endfor %}
     </script>
 </body>
 

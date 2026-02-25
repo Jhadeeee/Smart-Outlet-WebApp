@@ -4,19 +4,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.contrib import messages
 from django.http import JsonResponse
-from django.views.decorators.http import require_http_methods
-from django.views.decorators.csrf import csrf_exempt
-import json
-from .models import (
-    Outlet,
-    SensorData,
-    UserProfile,
-    TestTelemetryLog,
-    TestEventLog,
-    CCUCommandQueue,
-    SmartOutletDevice
-)
-from django.utils import timezone
+from .models import Outlet, SensorData, UserProfile, PendingCommand, MainBreakerReading, CentralControlUnit
 
 # ============ AUTHENTICATION VIEWS ============
 
@@ -94,28 +82,65 @@ def logout_view(request):
     return redirect('outlets:login')
 
 
-# ============ HOME PAGE ============
+# ============ HOME PAGE / DASHBOARD ============
 
 @login_required
 def home_view(request):
-    """Homepage - Welcome message"""
+    """Homepage — Main Dashboard with real outlet data"""
+    outlets = Outlet.objects.filter(user=request.user)
+    
+    # Build outlet data with latest sensor readings
+    outlet_data = []
+    
+    for outlet in outlets:
+        latest = outlet.sensor_data.first()  # ordered by -timestamp
+        cur_a = latest.current_a if latest else 0
+        cur_b = latest.current_b if latest else 0
+        is_overload = latest.is_overload if latest else False
+        
+        outlet_data.append({
+            'outlet': outlet,
+            'current_a': cur_a,
+            'current_b': cur_b,
+            'current_a_amps': round(cur_a / 1000.0, 2),
+            'current_b_amps': round(cur_b / 1000.0, 2),
+            'total_amps': round((cur_a + cur_b) / 1000.0, 2),
+            'is_overload': is_overload,
+            'has_data': latest is not None,
+        })
+    
+    # Get user's registered CCUs
+    user_ccus = CentralControlUnit.objects.filter(user=request.user)
+    user_ccu_ids = list(user_ccus.values_list('ccu_id', flat=True))
+    
+    # Get total load from SCT-013 sensor (main breaker) — filtered by user's CCUs
+    total_current = 0
+    first_ccu_id = ''
+    if user_ccu_ids:
+        latest_breaker = MainBreakerReading.objects.filter(ccu_id__in=user_ccu_ids).first()
+        total_current = latest_breaker.current_ma if latest_breaker else 0
+        first_ccu_id = user_ccu_ids[0]
+    
+    active_count = sum(1 for o in outlets if o.relay_a or o.relay_b)
+    inactive_count = len(outlet_data) - active_count
+    
     context = {
         'user': request.user,
+        'outlet_data': outlet_data,
+        'total_current_amps': round(total_current / 1000.0, 2),
+        'user_ccus': user_ccus,
+        'ccu_id': first_ccu_id,
+        'active_count': active_count,
+        'inactive_count': inactive_count,
+        'outlet_count': len(outlet_data),
     }
     return render(request, 'home.html', context)
 
 
-# ============ DASHBOARD (for later) ============
-
 @login_required
 def dashboard(request):
-    """Main dashboard showing all outlets"""
-    outlets = Outlet.objects.filter(user=request.user)
-    
-    context = {
-        'outlets': outlets,
-    }
-    return render(request, 'index.html', context)
+    """Redirect dashboard to home"""
+    return redirect('outlets:home')
 
 @login_required
 def outlet_detail(request, device_id):
@@ -133,248 +158,132 @@ def outlet_detail(request, device_id):
 
 @login_required
 def toggle_outlet(request, device_id):
-    """Toggle outlet ON/OFF status"""
+    """
+    Toggle outlet relay ON/OFF.
+    Expects POST with 'socket' param ('a' or 'b').
+    Creates a PendingCommand for the CCU to pick up.
+    """
     if request.method == 'POST':
         outlet = get_object_or_404(Outlet, device_id=device_id, user=request.user)
-        outlet.is_active = not outlet.is_active
+        socket = request.POST.get('socket', 'a').lower()
+        
+        if socket not in ('a', 'b'):
+            return JsonResponse({'success': False, 'message': 'Invalid socket. Use "a" or "b".'})
+        
+        # Toggle the relay state in DB
+        if socket == 'a':
+            outlet.relay_a = not outlet.relay_a
+            new_state = outlet.relay_a
+        else:
+            outlet.relay_b = not outlet.relay_b
+            new_state = outlet.relay_b
         outlet.save()
+        
+        # Queue command for CCU to pick up
+        PendingCommand.objects.create(
+            outlet=outlet,
+            command='relay_on' if new_state else 'relay_off',
+            socket=socket,
+        )
         
         return JsonResponse({
             'success': True,
-            'is_active': outlet.is_active,
-            'message': f'Outlet turned {"ON" if outlet.is_active else "OFF"}'
+            'relay_a': outlet.relay_a,
+            'relay_b': outlet.relay_b,
+            'message': f'Socket {socket.upper()} turned {"ON" if new_state else "OFF"}'
         })
     
     return JsonResponse({'success': False, 'message': 'Invalid request method'})
 
 
-# ==========================================
-# TESTING & CALIBRATION DASHBOARD
-# ==========================================
+@login_required
+def add_outlet(request):
+    """Register a new smart outlet device."""
+    if request.method == 'POST':
+        name = request.POST.get('name', '').strip()
+        device_id = request.POST.get('device_id', '').strip().upper()
+        location = request.POST.get('location', '').strip()
 
-from .models import TestTelemetryLog, TestEventLog
+        if not name or not device_id:
+            messages.error(request, 'Name and Device ID are required.')
+            return redirect('outlets:home')
 
-def test_dashboard_view(request):
-    """
-    Public bypassing dashboard for testing and calibration.
-    Displays live telemetry and event logs without requiring login.
-    """
-    telemetry_logs = TestTelemetryLog.objects.all()[:50]
-    event_logs = TestEventLog.objects.all()[:50]
-    
-    # Get the absolute most recent telemetry data to populate the visual controls
-    latest_telemetry = TestTelemetryLog.objects.first()
-    
-    # Extract all persistent devices
-    active_devices = SmartOutletDevice.objects.all()
-    
-    context = {
-        'telemetry_logs': telemetry_logs,
-        'event_logs': event_logs,
-        'latest_telemetry': latest_telemetry,
-        'active_devices': active_devices
-    }
-    return render(request, 'outlets/test_dashboard.html', context)
+        # Validate hex ID (1-2 hex chars)
+        try:
+            int(device_id, 16)
+        except ValueError:
+            messages.error(request, 'Device ID must be a valid hex value (e.g. FE).')
+            return redirect('outlets:home')
 
-@require_http_methods(["POST"])
-def clear_test_logs(request):
-    """
-    Clears all telemetry and event logs from the database.
-    Used for 'academic logging' cleanup before a new test run.
-    """
-    try:
-        TestTelemetryLog.objects.all().delete()
-        TestEventLog.objects.all().delete()
-        
-        TestEventLog.objects.create(
-            source='WEB_DASHBOARD',
-            action_type='SYSTEM_CLEARED',
-            target_device='ALL',
-            details='All testing logs were manually cleared by the user.'
+        # Check for duplicate device_id
+        if Outlet.objects.filter(device_id=device_id).exists():
+            messages.error(request, f'Device ID "{device_id}" is already registered.')
+            return redirect('outlets:home')
+
+        Outlet.objects.create(
+            user=request.user,
+            name=name,
+            device_id=device_id,
+            location=location,
         )
-        
-        return JsonResponse({'status': 'success', 'message': 'Logs cleared successfully.'})
-    except Exception as e:
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+        messages.success(request, f'Outlet "{name}" (0x{device_id}) added successfully!')
+        return redirect('outlets:home')
 
-@csrf_exempt
-@require_http_methods(["POST"])
-def receive_test_log(request):
-    """
-    Receives JSON telemetry payloads from the ESP32 CCU.
-    Stores each device as a separate row in TestTelemetryLog with the same timestamp.
-    """
-    try:
-        data = json.loads(request.body)
-        ccu_data = data.get('ccu', {})
-        devices = data.get('devices', [])
-        
-        main_mA = ccu_data.get('main_breaker_mA', 0)
-        main_limit = ccu_data.get('main_breaker_limit_mA', 15000)
-        
-        if not devices:
-            # Log just the CCU state if no devices connected
-            TestTelemetryLog.objects.create(
-                main_breaker_mA=main_mA,
-                main_breaker_limit_mA=main_limit,
-                device_id="NONE",
-                device_limit_mA=0,
-                socket_a_state=False, socket_a_mA=0,
-                socket_b_state=False, socket_b_mA=0
-            )
-        else:
-            # Log each device
-            # Log each device
-            for dev in devices:
-                socket_a = dev.get('socket_a', {})
-                socket_b = dev.get('socket_b', {})
-                
-                device_id = dev.get('id', '??')
-                limit_mA = dev.get('limit_mA', 5000)
-                a_state = bool(socket_a.get('state', 0))
-                a_mA = socket_a.get('mA', 0)
-                b_state = bool(socket_b.get('state', 0))
-                b_mA = socket_b.get('mA', 0)
-                
-                # 1. Update the persistent SmartOutletDevice record
-                if device_id != "NONE":
-                    obj, created = SmartOutletDevice.objects.update_or_create(
-                        device_id=device_id,
-                        defaults={
-                            'limit_mA': limit_mA,
-                            'last_socket_a_state': a_state,
-                            'last_socket_a_mA': a_mA,
-                            'last_socket_b_state': b_state,
-                            'last_socket_b_mA': b_mA
-                        }
-                    )
-                
-                # 2. Add to the append-only ledger
-                TestTelemetryLog.objects.create(
-                    main_breaker_mA=main_mA,
-                    main_breaker_limit_mA=main_limit,
-                    device_id=device_id,
-                    device_limit_mA=limit_mA,
-                    socket_a_state=a_state,
-                    socket_a_mA=a_mA,
-                    socket_b_state=b_state,
-                    socket_b_mA=b_mA
-                )
-                
-        # Check if there are any pending commands for the ESP32
-        pending = CCUCommandQueue.objects.filter(is_delivered=False).order_by('created_at').first()
-        
-        response_data = {
-            'status': 'success',
-            'pending_command': 'NONE'
-        }
-        
-        if pending:
-            response_data['pending_command'] = {
-                'id': pending.id,
-                'command': pending.command_type,
-                'target': pending.target_id,
-                'payload': pending.payload
-            }
-            # Mark as delivered (assume it will be picked up)
-            pending.is_delivered = True
-            pending.delivered_at = timezone.now()
-            pending.save()
-            
-            TestEventLog.objects.create(
-                action_type="ACK_RECEIVED",
-                source="WEB_DASHBOARD",
-                target_device=pending.target_id or "ALL",
-                details=f"Sent {pending.command_type} to ESP32: {pending.target_id} {pending.payload}"
-            )
-            
-        return JsonResponse(response_data)
-        
-    except json.JSONDecodeError:
-        return JsonResponse({'status': 'error', 'message': 'Invalid JSON'}, status=400)
-    except Exception as e:
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+    return redirect('outlets:home')
 
-@csrf_exempt
-@require_http_methods(["POST"])
-def enqueue_command(request):
-    """
-    Called by the web frontend via AJAX when the user clicks 'Add Device' or 'Set'.
-    Adds a command to the queue for the ESP32 to pick up on its next heartbeat.
-    """
-    try:
-        data = json.loads(request.body)
-        cmd_type = data.get('command')
-        target = data.get('target', None)
-        payload = data.get('payload', {})
-        
-        if not cmd_type:
-            return JsonResponse({'status': 'error', 'message': 'Missing command type'}, status=400)
-            
-        # Create the pending command
-        CCUCommandQueue.objects.create(
-            command_type=cmd_type,
-            target_id=target,
-            payload=payload
+
+@login_required
+def delete_outlet(request, device_id):
+    """Remove a registered smart outlet."""
+    if request.method == 'POST':
+        outlet = get_object_or_404(Outlet, device_id=device_id, user=request.user)
+        name = outlet.name
+        outlet.delete()
+        messages.success(request, f'Outlet "{name}" removed.')
+        return redirect('outlets:home')
+
+    return redirect('outlets:home')
+
+
+# ============ CCU MANAGEMENT ============
+
+@login_required
+def add_ccu(request):
+    """Register a new Central Control Unit (ESP32) to the user."""
+    if request.method == 'POST':
+        ccu_id = request.POST.get('ccu_id', '').strip().upper()
+        name = request.POST.get('name', '').strip() or 'My CCU'
+        location = request.POST.get('location', '').strip()
+
+        if not ccu_id:
+            messages.error(request, 'CCU ID is required.')
+            return redirect('outlets:home')
+
+        # Check for duplicate ccu_id
+        if CentralControlUnit.objects.filter(ccu_id=ccu_id).exists():
+            messages.error(request, f'CCU ID "{ccu_id}" is already registered.')
+            return redirect('outlets:home')
+
+        CentralControlUnit.objects.create(
+            user=request.user,
+            ccu_id=ccu_id,
+            name=name,
+            location=location,
         )
-        
-        if cmd_type == "CMD_ADD_DEVICE":
-            device_id_raw = payload.get("id", "")
-            device_name = payload.get("name", "Smart Outlet")
-            # Strip "0x" and uppercase for database storage
-            clean_id = device_id_raw.replace("0x", "").replace("0X", "").upper()
-            if clean_id:
-                SmartOutletDevice.objects.update_or_create(
-                    device_id=clean_id,
-                    defaults={'name': device_name}
-                )
+        messages.success(request, f'CCU "{name}" (ID: {ccu_id}) registered successfully!')
+        return redirect('outlets:home')
 
-        # Map command types to their corresponding Action Types for the log
-        action_mapping = {
-            "CMD_ADD_DEVICE": "ADD_DEVICE",
-            "CMD_SET_ID_MASTER": "SET_MASTER_ID",
-            "CMD_SET_LIMIT": "SET_THRESHOLD",
-            "CMD_CUT_POWER": "TOGGLE_RELAY"
-        }
-        action = action_mapping.get(cmd_type, "SET_THRESHOLD")
-        
-        TestEventLog.objects.create(
-            action_type=action,
-            source="WEB_DASHBOARD",
-            target_device=target or "ALL",
-            details=f"Queued {cmd_type} for ESP32 delivery"
-        )
-        
-        return JsonResponse({'status': 'success', 'message': 'Command added to queue.'})
-        
-    except Exception as e:
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+    return redirect('outlets:home')
 
-@csrf_exempt
-@require_http_methods(["GET"])
-def fetch_pending_commands(request):
-    """
-    Called by the ESP32 CCU during its heartbeat.
-    Returns all pending commands as a JSON array and removes them from the queue.
-    """
-    try:
-        commands = CCUCommandQueue.objects.all()
-        command_list = []
-        
-        for cmd in commands:
-            command_list.append({
-                'id': cmd.id,
-                'command': cmd.command_type,
-                'target': cmd.target_id,
-                'payload': cmd.payload,
-                'created_at': cmd.created_at.isoformat()
-            })
-            
-        # Delete fetched commands so they aren't processed twice
-        if command_list:
-            commands.delete()
-            
-        return JsonResponse({'status': 'success', 'commands': command_list})
-        
-    except Exception as e:
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+@login_required
+def delete_ccu(request, ccu_id):
+    """Remove a registered Central Control Unit."""
+    if request.method == 'POST':
+        ccu = get_object_or_404(CentralControlUnit, ccu_id=ccu_id, user=request.user)
+        name = ccu.name
+        ccu.delete()
+        messages.success(request, f'CCU "{name}" removed.')
+        return redirect('outlets:home')
+
+    return redirect('outlets:home')
