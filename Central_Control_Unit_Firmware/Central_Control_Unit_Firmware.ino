@@ -354,7 +354,8 @@ void loop() {
                     payload += "\"current_b\":" + String(dev.getCurrentB()) + ",";
                     payload += "\"relay_a\":" + String(dev.getRelayA() == 1 ? "true" : "false") + ",";
                     payload += "\"relay_b\":" + String(dev.getRelayB() == 1 ? "true" : "false") + ",";
-                    payload += "\"is_overload\":false}";
+                    bool isOverload = (dev.getCurrentA() == 65535 || dev.getCurrentB() == 65535);
+                    payload += "\"is_overload\":" + String(isOverload ? "true" : "false") + "}";
                     
                     int res = cloud.sendSensorData(payload);
                     if (res != 200 && res != 201) anyFail = true;
