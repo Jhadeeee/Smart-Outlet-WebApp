@@ -336,11 +336,18 @@ void loop() {
                     
                     // Request fresh data from PIC
                     outletManager.selectDevice(dev.getDeviceId());
+                    
+                    // Flush any stale data from previous devices in the RX buffer
+                    while(outletManager.getHC12().available()) {
+                        outletManager.getHC12().read();
+                    }
+                    
                     outletManager.readSensors();
                     
-                    // Briefly pump the RF receiver to catch the PIC's reply
+                    // Briefly pump the RF receiver to catch the PIC's replies (Socket A & B)
+                    // Increased from 150ms to 350ms to allow both packets to fully arrive
                     unsigned long waitStart = millis();
-                    while (millis() - waitStart < 150) {
+                    while (millis() - waitStart < 350) {
                         outletManager.update();
                     }
 
