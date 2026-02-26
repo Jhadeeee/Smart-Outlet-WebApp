@@ -179,6 +179,7 @@ __marimo__/
 *.DBK
 *.SDF
 *.DRC
+*.workspace
 
 # Project Backups
 **/Project Backups/
