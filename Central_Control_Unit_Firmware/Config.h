@@ -50,15 +50,7 @@
 #define BREAKER_BURDEN_RESISTOR      23   // Burden resistor in Ohms
 #define BREAKER_LINE_FREQ            60   // Mains frequency (50 or 60 Hz)
 #define BREAKER_DEFAULT_THRESHOLD_MA 15000 // Default overload threshold (15A)
-
-// SCTSensor Calculation Constants (used by SCTSensor.cpp)
-#define SCT_ADC_PIN                  BREAKER_ADC_PIN
-#define SCT_SAMPLES                  500   // Number of ADC samples per cycle
-#define SCT_ADC_RESOLUTION           4095.0 // 12-bit ADC (2^12 - 1)
-#define SCT_VREF                     3.3    // ESP32 Operating Voltage
-#define SCT_ADC_MIDPOINT             (SCT_ADC_RESOLUTION / 2.0) // ~1.65V DC offset
-// Calibration = (CT_TURNS / BURDEN_RESISTOR)
-#define SCT_CALIBRATION              ((double)BREAKER_CT_TURNS / BREAKER_BURDEN_RESISTOR)
+#define BREAKER_CLOUD_INTERVAL_MS    5000  // Send breaker data to cloud every 5s
 
 // ─── Serial ─────────────────────────────────────────────────
 #define SERIAL_BAUD      115200
