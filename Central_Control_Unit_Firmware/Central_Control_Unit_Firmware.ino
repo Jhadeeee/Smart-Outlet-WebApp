@@ -285,7 +285,7 @@ void loop() {
                 breakerPayload += "\"current_ma\":" + String(breakerMA);
                 breakerPayload += "}";
 
-                int rc = cloud.sendToEndpoint("/api/breaker-data/", breakerPayload);
+                int rc = cloud.sendBreakerData(breakerPayload);
                 if (rc == 200) {
                     Serial.println("[SCT] Sent breaker current: " + String(breakerMA) + "mA");
                 }
@@ -319,7 +319,7 @@ void loop() {
                     payload += "\"is_overload\":" + String(overload ? "true" : "false");
                     payload += "}";
 
-                    int responseCode = cloud.sendData(payload);
+                    int responseCode = cloud.sendSensorData(payload);
                     if (responseCode == 200) anySendOk = true;
                 }
 

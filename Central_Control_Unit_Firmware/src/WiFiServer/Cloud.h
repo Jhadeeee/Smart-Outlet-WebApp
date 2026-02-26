@@ -2,7 +2,6 @@
  * Cloud.h
  * --------
  * Handles HTTP communication with the remote server.
- * Sends sensor data via POST and polls for commands via GET.
  */
 
 #ifndef CLOUD_H
@@ -20,15 +19,17 @@ public:
     // Initialize with server URL
     void begin(const String& serverUrl);
 
-    // Send JSON data to server via POST /api/data/
-    int sendData(const String& jsonPayload);
+    // Send JSON data to server via POST (Outlet Sensors)
+    int sendSensorData(const String& jsonPayload);
 
-    // Send JSON data to a custom endpoint (e.g., /api/breaker-data/)
-    int sendToEndpoint(const String& endpoint, const String& jsonPayload);
+    // Send JSON data to server via POST (Main Breaker)
+    int sendBreakerData(const String& jsonPayload);
 
-    // Poll for pending commands via GET /api/commands/<deviceId>/
-    // Returns the raw JSON response body (caller parses it)
+    // Fetch pending commands for a specific device (GET request)
     String fetchCommands(const String& deviceId);
+
+    // Fetch registered device list from server (GET request)
+    String fetchDevices();
 
     // Check if server is reachable (GET request)
     bool isReachable();

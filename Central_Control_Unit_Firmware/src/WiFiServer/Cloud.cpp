@@ -2,7 +2,6 @@
  * Cloud.cpp
  * ----------
  * Implementation of HTTP server communication.
- * Sends sensor data to Django /api/data/ and polls /api/commands/.
  */
 
 #include "Cloud.h"
@@ -23,54 +22,46 @@ void Cloud::begin(const String& serverUrl) {
     Serial.println("[Cloud] Initialized with server: " + _serverUrl);
 }
 
-int Cloud::sendData(const String& jsonPayload) {
-    if (_serverUrl.length() == 0) {
-        return -1;
-    }
-
-    if (WiFi.status() != WL_CONNECTED) {
-        return -1;
-    }
-
-    HTTPClient http;
-    String endpoint = _serverUrl + "/api/data/";  // Django expects trailing slash
-
-    http.begin(endpoint);
-    http.addHeader("Content-Type", "application/json");
-    http.setTimeout(HTTP_TIMEOUT_MS);
-
-    _lastResponseCode = http.POST(jsonPayload);
-
-    if (_lastResponseCode > 0) {
-        _lastResponse = http.getString();
-    } else {
-        _lastResponse = http.errorToString(_lastResponseCode);
-    }
-
-    http.end();
-    return _lastResponseCode;
-}
-
-int Cloud::sendToEndpoint(const String& endpoint, const String& jsonPayload) {
+int Cloud::sendSensorData(const String& jsonPayload) {
     if (_serverUrl.length() == 0 || WiFi.status() != WL_CONNECTED) {
         return -1;
     }
 
     HTTPClient http;
-    String url = _serverUrl + endpoint;
-
-    http.begin(url);
+    String endpoint = _serverUrl + "/api/data/";
+    
+    http.begin(endpoint);
     http.addHeader("Content-Type", "application/json");
     http.setTimeout(HTTP_TIMEOUT_MS);
 
     _lastResponseCode = http.POST(jsonPayload);
-
     if (_lastResponseCode > 0) {
         _lastResponse = http.getString();
     } else {
         _lastResponse = http.errorToString(_lastResponseCode);
     }
+    http.end();
+    return _lastResponseCode;
+}
 
+int Cloud::sendBreakerData(const String& jsonPayload) {
+    if (_serverUrl.length() == 0 || WiFi.status() != WL_CONNECTED) {
+        return -1;
+    }
+
+    HTTPClient http;
+    String endpoint = _serverUrl + "/api/breaker-data/";
+    
+    http.begin(endpoint);
+    http.addHeader("Content-Type", "application/json");
+    http.setTimeout(HTTP_TIMEOUT_MS);
+
+    _lastResponseCode = http.POST(jsonPayload);
+    if (_lastResponseCode > 0) {
+        _lastResponse = http.getString();
+    } else {
+        _lastResponse = http.errorToString(_lastResponseCode);
+    }
     http.end();
     return _lastResponseCode;
 }
@@ -82,19 +73,47 @@ String Cloud::fetchCommands(const String& deviceId) {
 
     HTTPClient http;
     String endpoint = _serverUrl + "/api/commands/" + deviceId + "/";
-
+    
     http.begin(endpoint);
     http.setTimeout(HTTP_TIMEOUT_MS);
 
     _lastResponseCode = http.GET();
-
-    String body = "";
+    String responseBody = "";
+    
     if (_lastResponseCode == 200) {
-        body = http.getString();
+        responseBody = http.getString();
+    } else if (_lastResponseCode > 0) {
+        _lastResponse = http.getString(); // Store error response
+    } else {
+        _lastResponse = http.errorToString(_lastResponseCode);
+    }
+    http.end();
+    return responseBody;
+}
+
+String Cloud::fetchDevices() {
+    if (_serverUrl.length() == 0 || WiFi.status() != WL_CONNECTED) {
+        return "";
     }
 
+    HTTPClient http;
+    String endpoint = _serverUrl + "/api/devices/";
+    
+    http.begin(endpoint);
+    http.setTimeout(HTTP_TIMEOUT_MS);
+
+    _lastResponseCode = http.GET();
+    String responseBody = "";
+    
+    if (_lastResponseCode == 200) {
+        responseBody = http.getString();
+    } else if (_lastResponseCode > 0) {
+        _lastResponse = http.getString();
+    } else {
+        _lastResponse = http.errorToString(_lastResponseCode);
+    }
     http.end();
-    return body;
+    return responseBody;
 }
 
 bool Cloud::isReachable() {

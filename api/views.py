@@ -248,6 +248,71 @@ def get_outlet_status(request, device_id):
             'message': f'Outlet with device_id {device_id} not found'
         }, status=404)
 
+@require_http_methods(["POST"])
+def queue_command(request, device_id, command):
+    """
+    API endpoint for the UI to queue a new command for an outlet.
+    URL: POST /api/commands/<device_id>/<command>/
+    """
+    if not request.user.is_authenticated:
+        return JsonResponse({'success': False, 'message': 'Authentication required'}, status=401)
+        
+    try:
+        # Check permissions: does the user own this outlet?
+        outlet = Outlet.objects.get(device_id=device_id, user=request.user)
+        
+        valid_commands = [c[0] for c in PendingCommand.COMMAND_CHOICES]
+        if command not in valid_commands:
+            return JsonResponse({'success': False, 'message': 'Invalid command'}, status=400)
+            
+        socket = request.POST.get('socket', '').lower()
+        if socket not in ['a', 'b', '']:
+            return JsonResponse({'success': False, 'message': 'Invalid socket'}, status=400)
+            
+        value = request.POST.get('value')
+        if value is not None:
+            try:
+                value = int(value)
+            except ValueError:
+                return JsonResponse({'success': False, 'message': 'Invalid value format'}, status=400)
+                
+        # Optimization: Clear any existing unexecuted identical commands to prevent queue bloat
+        PendingCommand.objects.filter(
+            outlet=outlet, 
+            command=command, 
+            socket=socket, 
+            is_executed=False
+        ).delete()
+        
+        # Create the new pending command
+        PendingCommand.objects.create(
+            outlet=outlet,
+            command=command,
+            socket=socket,
+            value=value
+        )
+        
+        # If toggling relay, optionally update model speculatively
+        # so the UI gets instant feedback on refresh before polling catches up
+        if command == 'relay_on' or command == 'relay_off':
+            state = True if command == 'relay_on' else False
+            if socket == 'a':
+                outlet.relay_a = state
+                outlet.save(update_fields=['relay_a', 'updated_at'])
+            elif socket == 'b':
+                outlet.relay_b = state
+                outlet.save(update_fields=['relay_b', 'updated_at'])
+                
+        elif command == 'set_threshold' and value is not None:
+            outlet.threshold = value
+            outlet.save(update_fields=['threshold', 'updated_at'])
+            
+        return JsonResponse({'success': True, 'message': f'Command {command} queued successfully'})
+        
+    except Outlet.DoesNotExist:
+        return JsonResponse({'success': False, 'message': 'Outlet not found or unauthorized'}, status=404)
+
+
 
 @csrf_exempt
 @require_http_methods(["GET"])
@@ -297,3 +362,18 @@ def get_pending_commands(request, device_id):
             'success': False,
             'message': f'Outlet with device_id {device_id} not found'
         }, status=404)
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def get_registered_outlets(request):
+    """
+    API endpoint for CCU to fetch the master list of registered outlets.
+    URL: GET /api/devices/
+    
+    Returns: { "success": true, "devices": ["FE", "FD"] }
+    """
+    outlets = Outlet.objects.values_list('device_id', flat=True)
+    return JsonResponse({
+        'success': True,
+        'devices': list(outlets)
+    })
