@@ -50,7 +50,7 @@
 #define BREAKER_BURDEN_RESISTOR      23   // Burden resistor in Ohms
 #define BREAKER_LINE_FREQ            60   // Mains frequency (50 or 60 Hz)
 #define BREAKER_DEFAULT_THRESHOLD_MA 15000 // Default overload threshold (15A)
-#define BREAKER_CLOUD_INTERVAL_MS    5000  // Send breaker data to cloud every 5s
+#define BREAKER_CLOUD_INTERVAL_MS    2000  // Send breaker data to cloud every 2s
 
 // ─── Serial ─────────────────────────────────────────────────
 #define SERIAL_BAUD      115200

@@ -313,15 +313,15 @@ void OutletManager::_parsePacket(const uint8_t* frame) {
             Serial.print(" mA (");
             Serial.print(val16 / 1000.0, 2);
             Serial.println(" A)");
+        }
 
-            // Store current on active device, using sender as socket ID
-            // PIC sets sender_id = 0x01 (Socket A) or 0x02 (Socket B)
-            if (_deviceCount > 0) {
-                if (sender == SOCKET_A)
-                    _devices[_activeIndex].setCurrentA(val16);
-                else if (sender == SOCKET_B)
-                    _devices[_activeIndex].setCurrentB(val16);
-            }
+        // Store current on active device, using sender as socket ID
+        // PIC sets sender_id = 0x01 (Socket A) or 0x02 (Socket B)
+        if (_deviceCount > 0) {
+            if (sender == SOCKET_A)
+                _devices[_activeIndex].setCurrentA(val16);
+            else if (sender == SOCKET_B)
+                _devices[_activeIndex].setCurrentB(val16);
         }
     }
     else {

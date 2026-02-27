@@ -10,7 +10,7 @@ import json
 
 # How often to persist sensor data to the database (in minutes).
 # Data is always pushed to WebSocket for real-time UI updates.
-DB_LOG_INTERVAL = timedelta(minutes=5)
+DB_LOG_INTERVAL = timedelta(seconds=30)
 
 @csrf_exempt
 @require_http_methods(["POST"])

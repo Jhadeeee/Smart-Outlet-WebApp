@@ -74,6 +74,7 @@ DeviceMode currentMode = DeviceMode::SETUP;
 
 // ─── Timing ─────────────────────────────────────────────────
 unsigned long lastCloudSend = 0;
+unsigned long lastBreakerSend = 0;
 unsigned int  cloudFailCount = 0;    // Tracks consecutive failures to suppress spam
 
 // ─── Factory Reset Check ────────────────────────────────────
@@ -368,21 +369,7 @@ void loop() {
                     if (res != 200 && res != 201) anyFail = true;
                 }
 
-                // 2. Send Breaker Data
-                if (breakerMonitor.hasReading()) {
-                    String hexId = String(outletManager.getSenderID(), HEX);
-                    hexId.toUpperCase();
-                    String breakerPayload = "{\"ccu_id\":\"";
-                    if (outletManager.getSenderID() < 0x10) breakerPayload += "0";
-                    breakerPayload += hexId + "\",";
-                    
-                    breakerPayload += "\"current_ma\":" + String(breakerMonitor.getMilliAmps()) + "}";
-                    
-                    int res = cloud.sendBreakerData(breakerPayload);
-                    if (res != 200 && res != 201) anyFail = true;
-                }
-
-                // 3. Fetch and Execute Commands
+                // 2. Fetch and Execute Commands
                 for (uint8_t i = 0; i < outletManager.getDeviceCount(); i++) {
                     OutletDevice& dev = outletManager.getDevice(i);
                     String devIdStr = String(dev.getDeviceId(), HEX);
@@ -468,6 +455,24 @@ void loop() {
                     statusLED.setPattern(LEDPattern::SOLID);
                 }
             }
+
+            // Independent Periodic Cloud Sync for Breaker Data
+            if (millis() - lastBreakerSend >= BREAKER_CLOUD_INTERVAL_MS) {
+                lastBreakerSend = millis();
+                if (breakerMonitor.hasReading()) {
+                    String hexId = String(outletManager.getSenderID(), HEX);
+                    hexId.toUpperCase();
+                    String breakerPayload = "{\"ccu_id\":\"";
+                    if (outletManager.getSenderID() < 0x10) breakerPayload += "0";
+                    breakerPayload += hexId + "\",";
+                    
+                    breakerPayload += "\"current_ma\":" + String(breakerMonitor.getMilliAmps()) + "}";
+                    
+                    cloud.sendBreakerData(breakerPayload);
+                    // Silently fail if not reachable, to avoid interfering with Outlet connection tracking
+                }
+            }
+            
             break;
     }
 }
