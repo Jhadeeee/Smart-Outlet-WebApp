@@ -72,10 +72,12 @@ enum class DeviceMode {
 
 DeviceMode currentMode = DeviceMode::SETUP;
 
-// ─── Timing ─────────────────────────────────────────────────
-unsigned long lastCloudSend = 0;
-unsigned long lastBreakerSend = 0;
-unsigned int  cloudFailCount = 0;    // Tracks consecutive failures to suppress spam
+// ─── Timing (independent timers) ────────────────────────────
+unsigned long lastCommandPoll = 0;   // Command fetch timer (fast)
+unsigned long lastSensorSend  = 0;   // Sensor data send timer
+unsigned long lastDeviceSync  = 0;   // Device list sync timer
+unsigned long lastBreakerSend = 0;   // Breaker data send timer
+unsigned int  cloudFailCount  = 0;   // Tracks consecutive failures to suppress spam
 
 // ─── Factory Reset Check ────────────────────────────────────
 void checkFactoryReset() {
@@ -305,71 +307,12 @@ void loop() {
                 }
             }
 
-            // Periodic cloud data sync & command fetch
-            if (millis() - lastCloudSend >= CLOUD_SEND_INTERVAL_MS) {
-                lastCloudSend = millis();
-                bool anyFail = false;
+            // ── 1. FAST: Command Polling (every 1s) ──────────────
+            //    This runs independently so relay commands are picked
+            //    up quickly, without waiting for the slow sensor cycle.
+            if (millis() - lastCommandPoll >= COMMAND_POLL_INTERVAL_MS) {
+                lastCommandPoll = millis();
 
-                // 0. Re-sync device list from Django (picks up newly added outlets)
-                String devJson = cloud.fetchDevices();
-                devJson.replace(" ", "");
-                if (devJson.indexOf("\"success\":true") >= 0) {
-                    int arrStart = devJson.indexOf("[");
-                    int arrEnd = devJson.indexOf("]");
-                    if (arrStart >= 0 && arrEnd > arrStart) {
-                        String arr = devJson.substring(arrStart + 1, arrEnd);
-                        while (arr.length() > 0) {
-                            int qStart = arr.indexOf("\"");
-                            if (qStart < 0) break;
-                            int qEnd = arr.indexOf("\"", qStart + 1);
-                            if (qEnd < 0) break;
-                            String devId = arr.substring(qStart + 1, qEnd);
-                            uint8_t id = (uint8_t)strtol(devId.c_str(), NULL, 16);
-                            outletManager.selectDevice(id); // No-op if already exists
-                            arr = arr.substring(qEnd + 1);
-                        }
-                    }
-                }
-
-                // 1. Request fresh sensor data & Send to Cloud
-                for (uint8_t i = 0; i < outletManager.getDeviceCount(); i++) {
-                    OutletDevice& dev = outletManager.getDevice(i);
-                    
-                    // Request fresh data from PIC
-                    outletManager.selectDevice(dev.getDeviceId());
-                    
-                    // Flush any stale data from previous devices in the RX buffer
-                    while(outletManager.getHC12().available()) {
-                        outletManager.getHC12().read();
-                    }
-                    
-                    outletManager.readSensors();
-                    
-                    // Briefly pump the RF receiver to catch the PIC's replies (Socket A & B)
-                    // Increased from 150ms to 350ms to allow both packets to fully arrive
-                    unsigned long waitStart = millis();
-                    while (millis() - waitStart < 350) {
-                        outletManager.update();
-                    }
-
-                    String hexId = String(dev.getDeviceId(), HEX);
-                    hexId.toUpperCase();
-                    String payload = "{\"device_id\":\"";
-                    if (dev.getDeviceId() < 0x10) payload += "0";
-                    payload += hexId + "\",";
-                    
-                    payload += "\"current_a\":" + String(dev.getCurrentA()) + ",";
-                    payload += "\"current_b\":" + String(dev.getCurrentB()) + ",";
-                    payload += "\"relay_a\":" + String(dev.getRelayA() == 1 ? "true" : "false") + ",";
-                    payload += "\"relay_b\":" + String(dev.getRelayB() == 1 ? "true" : "false") + ",";
-                    bool isOverload = (dev.getCurrentA() == 65535 || dev.getCurrentB() == 65535);
-                    payload += "\"is_overload\":" + String(isOverload ? "true" : "false") + "}";
-                    
-                    int res = cloud.sendSensorData(payload);
-                    if (res != 200 && res != 201) anyFail = true;
-                }
-
-                // 2. Fetch and Execute Commands
                 for (uint8_t i = 0; i < outletManager.getDeviceCount(); i++) {
                     OutletDevice& dev = outletManager.getDevice(i);
                     String devIdStr = String(dev.getDeviceId(), HEX);
@@ -433,9 +376,49 @@ void loop() {
                             
                             startIdx = endIdx + 1;
                         }
-                    } else if (jsonCommands.length() > 0) {
-                         anyFail = true;
                     }
+                }
+            }
+
+            // ── 2. MEDIUM: Sensor Data Send (every 2s) ───────────
+            if (millis() - lastSensorSend >= SENSOR_SEND_INTERVAL_MS) {
+                lastSensorSend = millis();
+                bool anyFail = false;
+
+                for (uint8_t i = 0; i < outletManager.getDeviceCount(); i++) {
+                    OutletDevice& dev = outletManager.getDevice(i);
+                    
+                    // Request fresh data from PIC
+                    outletManager.selectDevice(dev.getDeviceId());
+                    
+                    // Flush stale RX data
+                    while(outletManager.getHC12().available()) {
+                        outletManager.getHC12().read();
+                    }
+                    
+                    outletManager.readSensors();
+                    
+                    // Wait for PIC reply (2 packets: Socket A + B, needs margin for RF collisions)
+                    unsigned long waitStart = millis();
+                    while (millis() - waitStart < 350) {
+                        outletManager.update();
+                    }
+
+                    String hexId = String(dev.getDeviceId(), HEX);
+                    hexId.toUpperCase();
+                    String payload = "{\"device_id\":\"";
+                    if (dev.getDeviceId() < 0x10) payload += "0";
+                    payload += hexId + "\",";
+                    
+                    payload += "\"current_a\":" + String(dev.getCurrentA()) + ",";
+                    payload += "\"current_b\":" + String(dev.getCurrentB()) + ",";
+                    payload += "\"relay_a\":" + String(dev.getRelayA() == 1 ? "true" : "false") + ",";
+                    payload += "\"relay_b\":" + String(dev.getRelayB() == 1 ? "true" : "false") + ",";
+                    bool isOverload = (dev.getCurrentA() == 65535 || dev.getCurrentB() == 65535);
+                    payload += "\"is_overload\":" + String(isOverload ? "true" : "false") + "}";
+                    
+                    int res = cloud.sendSensorData(payload);
+                    if (res != 200 && res != 201) anyFail = true;
                 }
 
                 // Connection monitoring logic
@@ -453,6 +436,31 @@ void loop() {
                         Serial.println("✗ Cloud communication issue (" + String(cloudFailCount) + " attempts).");
                     }
                     statusLED.setPattern(LEDPattern::SOLID);
+                }
+            }
+
+            // ── 3. SLOW: Device List Sync (every 10s) ────────────
+            if (millis() - lastDeviceSync >= DEVICE_SYNC_INTERVAL_MS) {
+                lastDeviceSync = millis();
+
+                String devJson = cloud.fetchDevices();
+                devJson.replace(" ", "");
+                if (devJson.indexOf("\"success\":true") >= 0) {
+                    int arrStart = devJson.indexOf("[");
+                    int arrEnd = devJson.indexOf("]");
+                    if (arrStart >= 0 && arrEnd > arrStart) {
+                        String arr = devJson.substring(arrStart + 1, arrEnd);
+                        while (arr.length() > 0) {
+                            int qStart = arr.indexOf("\"");
+                            if (qStart < 0) break;
+                            int qEnd = arr.indexOf("\"", qStart + 1);
+                            if (qEnd < 0) break;
+                            String devId = arr.substring(qStart + 1, qEnd);
+                            uint8_t id = (uint8_t)strtol(devId.c_str(), NULL, 16);
+                            outletManager.selectDevice(id); // No-op if already exists
+                            arr = arr.substring(qEnd + 1);
+                        }
+                    }
                 }
             }
 

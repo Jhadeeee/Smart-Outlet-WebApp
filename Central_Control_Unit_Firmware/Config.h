@@ -56,7 +56,9 @@
 #define SERIAL_BAUD      115200
 
 // ─── Cloud / Server ─────────────────────────────────────────
-#define CLOUD_SEND_INTERVAL_MS  2000      // How often to send data to server
-#define HTTP_TIMEOUT_MS         5000      // HTTP request timeout
+#define COMMAND_POLL_INTERVAL_MS  1000   // Fetch commands every 1s (fast response)
+#define SENSOR_SEND_INTERVAL_MS   2000   // Send sensor data every 2s
+#define DEVICE_SYNC_INTERVAL_MS  10000   // Re-sync device list every 10s
+#define HTTP_TIMEOUT_MS          5000    // HTTP request timeout
 
 #endif // CONFIG_H

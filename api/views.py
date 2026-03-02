@@ -64,16 +64,10 @@ def receive_sensor_data(request):
         
         now = timezone.now()
         
-        # Update outlet relay states immediately (always)
-        relay_updated = False
-        if 'relay_a' in data:
-            outlet.relay_a = bool(data['relay_a'])
-            relay_updated = True
-        if 'relay_b' in data:
-            outlet.relay_b = bool(data['relay_b'])
-            relay_updated = True
-        if relay_updated:
-            outlet.save()
+        # NOTE: Relay state (relay_a/relay_b) from sensor data is NOT used here.
+        # The ESP32 OutletDevice only knows relay state from PIC ACK packets,
+        # which are unreliable. Relay state is managed exclusively through
+        # queue_command() when the user toggles from the UI.
         
         # Alerts always fire immediately (critical events)
         if is_overload:

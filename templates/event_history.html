@@ -738,7 +738,7 @@
             const viewCards = document.getElementById('viewCards');
 
             // Load saved preference
-            const savedLayout = localStorage.getItem('eventHistoryLayout') || 'tabular';
+            const savedLayout = localStorage.getItem('eventHistoryLayout') || 'cards';
 
             function applyLayout(layout) {
                 if (layout === 'tabular') {
