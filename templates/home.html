@@ -1158,6 +1158,10 @@
                                 <i class="fas fa-cog"></i>
                                 <span>Admin Panel</span>
                             </a>
+                            <a href="{% url 'outlets:event_history' %}" class="profile-menu-item">
+                                <i class="fas fa-history"></i>
+                                <span>Event History</span>
+                            </a>
                             <a href="{% url 'outlets:logout' %}" class="profile-menu-item logout">
                                 <i class="fas fa-sign-out-alt"></i>
                                 <span>Logout</span>
@@ -1551,6 +1555,19 @@
                 sendCommand(id, 'relay_off', 'a');
                 sendCommand(id, 'relay_off', 'b');
             });
+
+            // Log a single CUT_ALL_POWER event
+            fetch('/api/log-event/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+                body: JSON.stringify({
+                    action_type: 'CUT_ALL_POWER',
+                    target_device: 'All Devices',
+                    details: `Emergency power cut — all ${outletIds.length} outlets turned OFF`,
+                    source: 'WEB_DASHBOARD'
+                })
+            });
+
             showToast('Cut power command broadcasted', 'success');
         }
         }

@@ -3,7 +3,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.utils import timezone
 from datetime import timedelta
-from outlets.models import Outlet, SensorData, Alert, PendingCommand, MainBreakerReading, CentralControlUnit
+from outlets.models import Outlet, SensorData, Alert, PendingCommand, MainBreakerReading, CentralControlUnit, EventLog
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 import json
@@ -21,7 +21,7 @@ def receive_sensor_data(request):
     
     Hybrid approach:
       - ALWAYS broadcasts via WebSocket for real-time UI
-      - Only saves to DB every 5 minutes (DB_LOG_INTERVAL)
+      - Only saves to DB every 30 seconds (DB_LOG_INTERVAL)
       - Alerts and relay state updates always happen immediately
     
     Expected JSON payload from CCU firmware:
@@ -82,12 +82,26 @@ def receive_sensor_data(request):
                 alert_type='overload',
                 message=f'Overload trip detected! Current A: {current_a}mA, Current B: {current_b}mA'
             )
+            EventLog.objects.create(
+                user=outlet.user,
+                source='PIC_HARDWARE',
+                action_type='OVERLOAD_TRIPPED',
+                target_device=f'0x{outlet.device_id}',
+                details=f'Overload trip on {outlet.name}! Socket A: {current_a}mA, Socket B: {current_b}mA. Relay auto-cutoff triggered.'
+            )
         
         if outlet.threshold > 0 and (current_a > outlet.threshold or current_b > outlet.threshold):
             Alert.objects.create(
                 outlet=outlet,
                 alert_type='threshold',
                 message=f'Threshold ({outlet.threshold}mA) exceeded! A: {current_a}mA, B: {current_b}mA'
+            )
+            EventLog.objects.create(
+                user=outlet.user,
+                source='SERVER',
+                action_type='THRESHOLD_EXCEEDED',
+                target_device=f'0x{outlet.device_id}',
+                details=f'Threshold ({outlet.threshold}mA) exceeded on {outlet.name}! Socket A: {current_a}mA, Socket B: {current_b}mA'
             )
         
         # DB write: only persist sensor data every DB_LOG_INTERVAL
@@ -296,16 +310,33 @@ def queue_command(request, device_id, command):
         # so the UI gets instant feedback on refresh before polling catches up
         if command == 'relay_on' or command == 'relay_off':
             state = True if command == 'relay_on' else False
+            state_label = 'ON' if state else 'OFF'
             if socket == 'a':
                 outlet.relay_a = state
                 outlet.save(update_fields=['relay_a', 'updated_at'])
             elif socket == 'b':
                 outlet.relay_b = state
                 outlet.save(update_fields=['relay_b', 'updated_at'])
+            
+            EventLog.objects.create(
+                user=request.user,
+                source='WEB_DASHBOARD',
+                action_type='TOGGLE_RELAY',
+                target_device=f'0x{outlet.device_id}',
+                details=f'Socket {socket.upper()} turned {state_label} on {outlet.name}'
+            )
                 
         elif command == 'set_threshold' and value is not None:
             outlet.threshold = value
             outlet.save(update_fields=['threshold', 'updated_at'])
+            
+            EventLog.objects.create(
+                user=request.user,
+                source='WEB_DASHBOARD',
+                action_type='SET_THRESHOLD',
+                target_device=f'0x{outlet.device_id}',
+                details=f'Threshold set to {value}mA on {outlet.name}'
+            )
             
         return JsonResponse({'success': True, 'message': f'Command {command} queued successfully'})
         
@@ -377,3 +408,32 @@ def get_registered_outlets(request):
         'success': True,
         'devices': list(outlets)
     })
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def log_event(request):
+    """
+    API endpoint for the UI to log a custom event (e.g. Cut All Power).
+    URL: POST /api/log-event/
+    """
+    if not request.user.is_authenticated:
+        return JsonResponse({'success': False, 'message': 'Authentication required'}, status=401)
+    
+    try:
+        data = json.loads(request.body)
+        action_type = data.get('action_type', '')
+        details = data.get('details', '')
+        target_device = data.get('target_device', 'All Devices')
+        source = data.get('source', 'WEB_DASHBOARD')
+        
+        EventLog.objects.create(
+            user=request.user,
+            source=source,
+            action_type=action_type,
+            target_device=target_device,
+            details=details,
+        )
+        return JsonResponse({'success': True, 'message': 'Event logged'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': str(e)}, status=500)

@@ -1,0 +1,436 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Event History - Smart Outlet</title>
+    <meta name="description"
+        content="Smart Outlet Event History — View all system events, relay toggles, overloads, and power cuts">
+
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+
+    <style>
+        :root {
+            --primary-purple: #667eea;
+            --secondary-purple: #764ba2;
+            --accent-blue: #2196F3;
+            --danger-red: #ef4444;
+            --warning-yellow: #f59e0b;
+            --success-green: #22c55e;
+            --inactive-gray: #94a3b8;
+            --bg-dark: #0f172a;
+            --bg-card: rgba(30, 41, 59, 0.7);
+            --bg-card-hover: rgba(51, 65, 85, 0.7);
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --border-color: rgba(148, 163, 184, 0.1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%);
+            min-height: 100vh;
+            color: var(--text-primary);
+        }
+
+        /* Navbar */
+        .navbar-custom {
+            background: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--border-color);
+            padding: 12px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .navbar-brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            text-decoration: none;
+            color: var(--text-primary);
+            font-weight: 700;
+            font-size: 1.1rem;
+        }
+
+        .navbar-brand i {
+            color: var(--primary-purple);
+            font-size: 1.3rem;
+        }
+
+        .back-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.85rem;
+            font-weight: 500;
+            padding: 8px 16px;
+            border-radius: 8px;
+            background: rgba(100, 116, 139, 0.15);
+            border: 1px solid var(--border-color);
+            transition: all 0.2s;
+        }
+
+        .back-btn:hover {
+            color: var(--text-primary);
+            background: rgba(100, 116, 139, 0.25);
+        }
+
+        /* Main Content */
+        .main-container {
+            padding: 24px 16px;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .page-header {
+            margin-bottom: 24px;
+        }
+
+        .page-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+
+        .page-subtitle {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+        }
+
+        /* Filter Bar */
+        .filter-bar {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+
+        .filter-btn {
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            border: 1px solid var(--border-color);
+            background: rgba(30, 41, 59, 0.6);
+            color: var(--text-secondary);
+            text-decoration: none;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+
+        .filter-btn:hover {
+            background: rgba(100, 116, 139, 0.3);
+            color: var(--text-primary);
+        }
+
+        .filter-btn.active {
+            background: linear-gradient(135deg, var(--primary-purple), var(--secondary-purple));
+            border-color: var(--primary-purple);
+            color: #fff;
+        }
+
+        /* Event Cards */
+        .event-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .event-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 14px 18px;
+            display: flex;
+            align-items: flex-start;
+            gap: 14px;
+            transition: all 0.2s;
+            backdrop-filter: blur(10px);
+        }
+
+        .event-card:hover {
+            background: var(--bg-card-hover);
+            transform: translateY(-1px);
+        }
+
+        .event-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.85rem;
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+
+        .event-icon.relay-on {
+            background: rgba(34, 197, 94, 0.15);
+            color: var(--success-green);
+        }
+
+        .event-icon.relay-off {
+            background: rgba(148, 163, 184, 0.15);
+            color: var(--inactive-gray);
+        }
+
+        .event-icon.overload {
+            background: rgba(239, 68, 68, 0.15);
+            color: var(--danger-red);
+        }
+
+        .event-icon.threshold {
+            background: rgba(245, 158, 11, 0.15);
+            color: var(--warning-yellow);
+        }
+
+        .event-icon.cut-all {
+            background: rgba(239, 68, 68, 0.2);
+            color: var(--danger-red);
+        }
+
+        .event-icon.system {
+            background: rgba(33, 150, 243, 0.15);
+            color: var(--accent-blue);
+        }
+
+        .event-body {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .event-title {
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-bottom: 2px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .event-badge {
+            font-size: 0.65rem;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .badge-relay-on {
+            background: rgba(34, 197, 94, 0.15);
+            color: var(--success-green);
+        }
+
+        .badge-relay-off {
+            background: rgba(148, 163, 184, 0.15);
+            color: var(--inactive-gray);
+        }
+
+        .badge-overload {
+            background: rgba(239, 68, 68, 0.15);
+            color: var(--danger-red);
+        }
+
+        .badge-threshold {
+            background: rgba(245, 158, 11, 0.15);
+            color: var(--warning-yellow);
+        }
+
+        .badge-cut-all {
+            background: rgba(239, 68, 68, 0.2);
+            color: var(--danger-red);
+        }
+
+        .badge-system {
+            background: rgba(33, 150, 243, 0.15);
+            color: var(--accent-blue);
+        }
+
+        .event-details {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+        }
+
+        .event-meta {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 0.7rem;
+            color: rgba(148, 163, 184, 0.7);
+        }
+
+        .event-meta i {
+            margin-right: 3px;
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-secondary);
+        }
+
+        .empty-state i {
+            font-size: 3rem;
+            margin-bottom: 16px;
+            opacity: 0.3;
+        }
+
+        .empty-state h3 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 6px;
+            color: var(--text-primary);
+        }
+
+        .empty-state p {
+            font-size: 0.85rem;
+        }
+
+        /* Responsive */
+        @media (max-width: 576px) {
+            .event-card {
+                padding: 12px 14px;
+                gap: 10px;
+            }
+
+            .event-icon {
+                width: 30px;
+                height: 30px;
+                font-size: 0.75rem;
+            }
+
+            .filter-bar {
+                gap: 6px;
+            }
+
+            .filter-btn {
+                padding: 5px 10px;
+                font-size: 0.7rem;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Navbar -->
+    <nav class="navbar-custom">
+        <a href="{% url 'outlets:home' %}" class="navbar-brand">
+            <i class="fas fa-bolt"></i>
+            <span>Smart Outlet</span>
+        </a>
+        <a href="{% url 'outlets:home' %}" class="back-btn">
+            <i class="fas fa-arrow-left"></i>
+            <span>Back to Dashboard</span>
+        </a>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="main-container">
+        <div class="page-header">
+            <h1 class="page-title"><i class="fas fa-history" style="color: var(--primary-purple);"></i> Event History
+            </h1>
+            <p class="page-subtitle">All system events, relay toggles, overloads, and power cuts</p>
+        </div>
+
+        <!-- Filter Bar -->
+        <div class="filter-bar">
+            <a href="{% url 'outlets:event_history' %}"
+                class="filter-btn {% if not filter_type %}active{% endif %}">All</a>
+            {% for value, label in action_choices %}
+            <a href="{% url 'outlets:event_history' %}?type={{ value }}"
+                class="filter-btn {% if filter_type == value %}active{% endif %}">{{ label }}</a>
+            {% endfor %}
+        </div>
+
+        <!-- Event List -->
+        <div class="event-list">
+            {% for event in events %}
+            <div class="event-card">
+                <!-- Icon -->
+                <div class="event-icon
+                    {% if event.action_type == 'TOGGLE_RELAY' and 'ON' in event.details %}relay-on
+                    {% elif event.action_type == 'TOGGLE_RELAY' %}relay-off
+                    {% elif event.action_type == 'OVERLOAD_TRIPPED' %}overload
+                    {% elif event.action_type == 'THRESHOLD_EXCEEDED' %}threshold
+                    {% elif event.action_type == 'CUT_ALL_POWER' %}cut-all
+                    {% else %}system{% endif %}">
+                    {% if event.action_type == 'TOGGLE_RELAY' and 'ON' in event.details %}
+                    <i class="fas fa-power-off"></i>
+                    {% elif event.action_type == 'TOGGLE_RELAY' %}
+                    <i class="fas fa-power-off"></i>
+                    {% elif event.action_type == 'OVERLOAD_TRIPPED' %}
+                    <i class="fas fa-exclamation-triangle"></i>
+                    {% elif event.action_type == 'THRESHOLD_EXCEEDED' %}
+                    <i class="fas fa-tachometer-alt"></i>
+                    {% elif event.action_type == 'CUT_ALL_POWER' %}
+                    <i class="fas fa-ban"></i>
+                    {% elif event.action_type == 'SET_THRESHOLD' %}
+                    <i class="fas fa-sliders-h"></i>
+                    {% else %}
+                    <i class="fas fa-info-circle"></i>
+                    {% endif %}
+                </div>
+
+                <!-- Body -->
+                <div class="event-body">
+                    <div class="event-title">
+                        {{ event.get_action_type_display }}
+                        <span class="event-badge
+                            {% if event.action_type == 'TOGGLE_RELAY' and 'ON' in event.details %}badge-relay-on
+                            {% elif event.action_type == 'TOGGLE_RELAY' %}badge-relay-off
+                            {% elif event.action_type == 'OVERLOAD_TRIPPED' %}badge-overload
+                            {% elif event.action_type == 'THRESHOLD_EXCEEDED' %}badge-threshold
+                            {% elif event.action_type == 'CUT_ALL_POWER' %}badge-cut-all
+                            {% else %}badge-system{% endif %}">
+                            {{ event.get_source_display }}
+                        </span>
+                    </div>
+                    <div class="event-details">{{ event.details }}</div>
+                    <div class="event-meta">
+                        <span><i class="fas fa-microchip"></i> {{ event.target_device }}</span>
+                        <span><i class="fas fa-clock"></i> {{ event.timestamp|date:"M d, Y — h:i:s A" }}</span>
+                    </div>
+                </div>
+            </div>
+            {% empty %}
+            <div class="empty-state">
+                <i class="fas fa-inbox"></i>
+                <h3>No Events Yet</h3>
+                <p>Events will appear here when relay toggles, overloads, or power cuts occur.</p>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+
+</html>

@@ -4,7 +4,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.contrib import messages
 from django.http import JsonResponse
-from .models import Outlet, SensorData, UserProfile, PendingCommand, MainBreakerReading, CentralControlUnit
+from .models import Outlet, SensorData, UserProfile, PendingCommand, MainBreakerReading, CentralControlUnit, EventLog
 
 # ============ AUTHENTICATION VIEWS ============
 
@@ -287,3 +287,27 @@ def delete_ccu(request, ccu_id):
         return redirect('outlets:home')
 
     return redirect('outlets:home')
+
+
+# ============ EVENT HISTORY ============
+
+@login_required
+def event_history_view(request):
+    """Event History page — shows all logged events for the current user."""
+    filter_type = request.GET.get('type', '')
+    
+    events = EventLog.objects.filter(user=request.user)
+    
+    if filter_type:
+        events = events.filter(action_type=filter_type)
+    
+    # Limit to latest 200 events for performance
+    events = events[:200]
+    
+    context = {
+        'events': events,
+        'filter_type': filter_type,
+        'action_choices': EventLog.ACTION_CHOICES,
+        'user': request.user,
+    }
+    return render(request, 'event_history.html', context)

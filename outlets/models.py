@@ -172,3 +172,46 @@ class PendingCommand(models.Model):
     
     def __str__(self):
         return f"{self.command} → {self.outlet.name} ({self.created_at.strftime('%H:%M:%S')})"
+
+
+class EventLog(models.Model):
+    """
+    Logs all significant system events: relay toggles, overload trips,
+    threshold changes, power cuts, etc.
+    
+    Reuses the existing 'outlets_testeventlog' table (renamed via migration).
+    """
+    SOURCE_CHOICES = [
+        ('WEB_DASHBOARD', 'Web Dashboard'),
+        ('ESP32_AUTO_CUT', 'ESP32 Auto Cutoff'),
+        ('PIC_HARDWARE', 'PIC Hardware'),
+        ('ESP32_SYSTEM', 'ESP32 System Logic'),
+        ('SERVER', 'Server'),
+    ]
+    
+    ACTION_CHOICES = [
+        ('TOGGLE_RELAY', 'Toggle Relay'),
+        ('SET_THRESHOLD', 'Set Threshold'),
+        ('SET_MASTER_ID', 'Set Master ID'),
+        ('ADD_DEVICE', 'Add Device'),
+        ('DELETE_DEVICE', 'Delete Device'),
+        ('OVERLOAD_TRIPPED', 'Overload Tripped'),
+        ('THRESHOLD_EXCEEDED', 'Threshold Exceeded'),
+        ('CUT_ALL_POWER', 'Cut All Power'),
+        ('ACK_RECEIVED', 'Command Acknowledged'),
+        ('SYSTEM_BOOT', 'System Boot'),
+        ('SYSTEM_CLEARED', 'System Cleared'),
+    ]
+    
+    user = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='event_logs')
+    timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
+    source = models.CharField(max_length=50, choices=SOURCE_CHOICES)
+    action_type = models.CharField(max_length=50, choices=ACTION_CHOICES)
+    target_device = models.CharField(max_length=50, help_text="e.g. 0xFE, Main Breaker, or All Devices")
+    details = models.TextField(help_text="Plain English explanation of the event")
+    
+    class Meta:
+        ordering = ['-timestamp']
+    
+    def __str__(self):
+        return f"[{self.action_type}] {self.target_device} — {self.timestamp.strftime('%Y-%m-%d %H:%M:%S')}"
