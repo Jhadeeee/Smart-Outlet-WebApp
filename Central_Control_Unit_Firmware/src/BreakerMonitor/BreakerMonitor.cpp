@@ -26,6 +26,13 @@ bool BreakerMonitor::update() {
     return false;
 }
 
+void BreakerMonitor::readFresh() {
+    // Blocking read — tight 166ms sampling burst, immune to WiFi noise
+    // This is the same approach the local dashboard API uses to show clean values
+    _lastAmps = _sensor.readAmps();
+    _hasReading = true;
+}
+
 double BreakerMonitor::getAmps() const {
     return _lastAmps;
 }
