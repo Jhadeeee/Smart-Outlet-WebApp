@@ -1,7 +1,7 @@
 # Central Control Unit (CCU) Firmware — Developer Documentation
 
 **MCU:** ESP32 · **Framework:** Arduino · **IDE:** Arduino IDE / PlatformIO  
-**Firmware:** v4.0.0 · **Communication:** HC-12 433MHz RF + WiFi
+**Firmware:** v4.1.0 · **Communication:** HC-12 433MHz RF + WiFi
 
 ---
 
@@ -133,6 +133,35 @@ The loop runs the active mode's subsystems:
 - WiFi reconnection — if disconnected, retries connection or falls back to SETUP
 - Cloud data push — sends JSON payload to server every 10 seconds
 - Cloud failure tracking — logs first failure, then reminders every ~60s
+- Feeds breaker reading cache to OutletManager for serial output
+
+---
+
+## Serial Output Format
+
+The firmware uses a clean, event-driven serial output format. No periodic output — prints only when data arrives.
+
+### RX Packet + Device Status
+
+```
+[TX] Read Sensors: 0x3
+[RX PACKET] RAW: AA 01 01 05 00 31 34 BB | FROM: 0x01 | TYPE: DATA REPORT (49mA)
+[PIC 3] Breaker: 2364mA | 0x03: A=49mA B=98mA | RA: ON RB: ON
+
+[TX] Relay A ON: 0x3
+[RX PACKET] RAW: AA 03 03 06 01 02 05 BB | FROM: 0x03 | TYPE: ACK (Socket A)
+[PIC 3] Breaker: 2364mA | 0x03: A=49mA B=98mA | RA: ON RB: ON
+```
+
+### Format Reference
+
+| Line | Format | When |
+|:-----|:-------|:-----|
+| `[TX]`        | `[TX] <Command>: 0x<ID>` | On every outgoing command |
+| `[RX PACKET]` | `RAW: <hex> \| FROM: 0x<ID> \| TYPE: <type> (<detail>)` | On every valid incoming packet |
+| `[PIC name]`  | `Breaker: <mA> \| 0x<ID>: A=<mA> B=<mA> \| RA: ON/OFF RB: ON/OFF` | After DATA REPORT or ACK |
+
+> **Silent when idle.** No output is printed unless the ESP32 receives data from a PIC.
 
 ---
 
@@ -279,6 +308,20 @@ Served on port 80, accessible via:
 | GET    | `/api/breaker`        | Get breaker reading      | —                        |
 | POST   | `/api/breaker/threshold`| Set breaker threshold  | value (mA)               |
 | POST   | `/api/breaker/cut`    | Cut device (A+B) or all  | index (int or `all`)     |
+
+### External API Routes (Django Direct Communication)
+
+These routes allow the Django server to send commands directly to the ESP32 via HTTP, bypassing the polling queue for faster response:
+
+| Method | Route                 | Action                   | Parameters                       | Response                            |
+|:-------|:----------------------|:-------------------------|:---------------------------------|:------------------------------------|
+| POST   | `/api/ext/relay`      | Toggle relay directly    | `device_id`, `socket`, `state`   | `{success, ack, device_id, socket, state}` |
+| POST   | `/api/ext/threshold`  | Set threshold directly   | `device_id`, `value`             | `{success, ack, device_id, value}`  |
+| GET    | `/api/ext/ping`       | Health check             | —                                | `{success, uptime, devices, freeHeap}` |
+
+> **Flow:** Django → HTTP POST → ESP32 `/api/ext/relay` → HC-12 → PIC → ACK → ESP32 → JSON response → Django
+
+> **Fallback:** If the ESP32 is unreachable, Django falls back to creating a `PendingCommand` for the next poll cycle.
 
 ---
 
@@ -458,6 +501,8 @@ When in RUNNING mode, the CCU periodically sends data to the configured server:
 | `uint8_t getSenderID() const` | Get the CCU's sender ID (master ID). |
 | `void setSenderID(uint8_t id)` | Set the CCU's sender ID. |
 | `uint8_t getLastAckSender() const` | Get sender of the most recent ACK (for ID change detection). |
+| `void setLastBreakerMA(uint16_t mA)` | Cache the latest breaker reading for `[PIC X]` serial output. |
+| `uint16_t getLastBreakerMA() const` | Get cached breaker reading. |
 | `void sendATCommand(const String&)` | Passthrough AT commands to HC-12 module. |
 | `void sendRawHex(const String&)` | Send raw hex bytes directly via HC-12. |
 | `HardwareSerial& getHC12()` | Get HC-12 serial reference for advanced use. |

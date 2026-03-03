@@ -1,7 +1,7 @@
 # Smart-Outlet-WebApp — Developer Documentation
 
 **Framework:** Django 5.2 · **ASGI Server:** Daphne · **Database:** PostgreSQL  
-**Real-Time:** Django Channels (WebSockets) · **Version:** v1.0.0 (first_stable_UI)
+**Real-Time:** Django Channels (WebSockets) · **Version:** v1.2.0
 
 ---
 
@@ -22,6 +22,8 @@
 │    - PendingCommand   - /api/commands/                       │
 │    - Alert            - /api/devices/                        │
 │    - MainBreakerReading                                      │
+│    - CentralControlUnit                                      │
+│    - EventLog                                                │
 │                                                              │
 │  ┌────────────────────────────────────────────────────────┐  │
 │  │   Frontend  (templates/home.html)                      │  │
@@ -56,6 +58,7 @@
 | `relay_a`    | BooleanField| `False`  | Socket A relay state               |
 | `relay_b`    | BooleanField| `False`  | Socket B relay state               |
 | `threshold`  | IntegerField| `0`      | Current threshold in mA            |
+| `ccu`        | ForeignKey  | null     | Linked `CentralControlUnit` (auto-set) |
 | `created_at` | DateTime    | auto     | Creation timestamp                 |
 | `updated_at` | DateTime    | auto     | Last update timestamp              |
 
@@ -109,7 +112,24 @@
 | `ccu_id`     | CharField    | —          | Unique CCU ID, e.g. `"01"`     |
 | `name`       | CharField    | `"My CCU"` | User-assigned label             |
 | `location`   | CharField    | `""`       | Optional location               |
+| `ip_address` | GenericIP    | null       | ESP32's LAN IP (auto-captured)  |
+| `last_seen`  | DateTime     | null       | Last data push timestamp        |
 | `created_at` | DateTime     | auto       | Registration timestamp          |
+
+> **IP Capture:** The ESP32's IP is automatically captured from every `/api/data/` and `/api/breaker-data/` POST. This enables direct communication.
+
+### EventLog
+
+Audit log for tracking user actions and system events.
+
+| Field        | Type         | Default  | Notes                              |
+|:-------------|:-------------|:---------|:-----------------------------------|
+| `user`       | ForeignKey   | null     | User who triggered the action      |
+| `source`     | CharField    | —        | `WEB_DASHBOARD`, `PIC_HARDWARE`, `SERVER` |
+| `action_type`| CharField    | —        | `TOGGLE_RELAY`, `OVERLOAD_TRIPPED`, `SET_THRESHOLD`, `THRESHOLD_EXCEEDED` |
+| `target_device` | CharField | `""`     | e.g. `0xFE`, `All Devices`         |
+| `details`    | TextField    | `""`     | Human-readable description         |
+| `created_at` | DateTime     | auto     | Event timestamp                    |
 
 ---
 
@@ -165,17 +185,29 @@
 6. Browser receives WebSocket message → updates UI in real-time
 ```
 
-### Commands (UI → Physical Relay)
+### Commands — Direct Communication (UI → ESP32 → PIC)
 
 ```
 1. User clicks toggle switch on web UI
 2. JavaScript fetch() POSTs to /api/commands/FE/relay_on/
-3. Django creates PendingCommand record in DB
-4. Django speculatively updates Outlet.relay_a in DB for instant UI feedback
-5. ESP32 polls GET /api/commands/FE/ (every 2s)
-6. Django returns pending commands, marks them as executed
-7. ESP32 parses command, sends HC-12 RF packet to PIC
-8. PIC toggles relay, sends CMD_ACK back
+3. Django looks up ESP32 IP from CentralControlUnit.ip_address
+4. Django sends HTTP POST to http://<ESP32_IP>/api/ext/relay
+5. ESP32 sends HC-12 RF packet to PIC
+6. PIC toggles relay, sends CMD_ACK back
+7. ESP32 returns JSON {success: true, ack: true} to Django
+8. Django updates Outlet state in DB + creates EventLog
+9. UI toast: "✅ Relay ON confirmed by ESP32"
+```
+
+### Commands — Fallback (Polling Queue)
+
+```
+If ESP32 is unreachable (offline, wrong IP, timeout):
+1. Django falls back to creating a PendingCommand record
+2. ESP32 polls GET /api/commands/FE/ (every 2s)
+3. Django returns pending commands, marks them as executed
+4. ESP32 parses command, sends HC-12 RF packet to PIC
+5. UI toast: "⚠️ Command queued (ESP32 offline)"
 ```
 
 ### Auto Device Registration (on boot)
@@ -219,8 +251,8 @@ Alerts fire **immediately** (not subject to the 5-minute DB throttle):
 
 | Function                     | Description                                    |
 |:-----------------------------|:-----------------------------------------------|
-| `sendCommand(deviceId, cmd, socket, value)` | Generic command sender via `fetch()` POST |
-| `toggleRelay(deviceId, socket, state)`      | Toggle relay ON/OFF                      |
+| `sendCommand(deviceId, cmd, socket, value)` | Generic command sender via `fetch()` POST. Returns `{success, direct}` |
+| `toggleRelay(deviceId, socket, state)`      | Toggle relay — adds loading state (dim + disable), reverts on failure |
 | `setOutletThreshold(deviceId)`              | Set per-outlet threshold from input      |
 | `setMainThreshold()`                        | Set main breaker threshold               |
 | `cutAllPower()`                             | Emergency: turn OFF all relays on all outlets |
@@ -310,3 +342,6 @@ Example: `http://10.31.253.107:8000`
 | **Auto device sync** | The ESP32 re-fetches `/api/devices/` every 2 seconds. New outlets added on the web UI are detected within 2 seconds — no reboot required. |
 | **WebSocket reconnect** | If the WebSocket connection drops, the frontend auto-reconnects after 5 seconds. |
 | **DB write throttle** | `SensorData` is only saved every 5 minutes. Real-time data is always available via WebSocket. |
+| **Direct fallback** | If ESP32 is unreachable for direct HTTP, Django silently falls back to `PendingCommand` queue (~2s delay). |
+| **Stale IP** | ESP32 IP is updated on every sensor push. If the IP changes, the next push auto-corrects it. |
+| **Current display** | Current values are displayed in milliamperes (mA) without rounding for higher precision. |
