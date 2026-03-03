@@ -128,6 +128,7 @@ void enterLocalDashboardMode() {
     dashboard.begin();
     outletManager.begin();
     breakerMonitor.begin();
+    breakerMonitor.tare();  // Zero-calibrate ADC offset
     serialCLI.begin();
     statusLED.setPattern(LEDPattern::SOLID);
 
@@ -194,6 +195,7 @@ void enterRunningMode() {
     serialCLI.begin();
     dashboard.begin();
     breakerMonitor.begin();
+    breakerMonitor.tare();  // Zero-calibrate ADC after WiFi connected
 
     Serial.println("\n✓ HC-12 RF + Serial CLI + Dashboard ready.");
     Serial.println("  Dashboard: http://" + wifiManager.getLocalIP().toString() + "/dashboard");

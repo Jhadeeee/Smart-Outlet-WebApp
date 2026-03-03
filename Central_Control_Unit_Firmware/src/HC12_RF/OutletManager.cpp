@@ -249,6 +249,12 @@ int OutletManager::_addDevice(uint8_t deviceId) {
     if (_deviceCount >= MAX_OUTLETS) return -1;
 
     _devices[_deviceCount].init(deviceId);
+
+    // Auto-name as "PIC X" if no name is set
+    char autoName[20];
+    snprintf(autoName, sizeof(autoName), "PIC %d", deviceId);
+    _devices[_deviceCount].setName(autoName);
+
     return _deviceCount++;
 }
 
