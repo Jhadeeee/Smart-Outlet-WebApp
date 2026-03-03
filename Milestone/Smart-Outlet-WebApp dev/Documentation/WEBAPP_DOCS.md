@@ -5,6 +5,75 @@
 
 ---
 
+## Quick Start Guide
+
+### 1. Start the Local Server
+
+All commands run from the project root: `C:\Users\USER\Desktop\CONCEPT PAPER\Smart-Outlet-WebApp`
+
+```powershell
+# Start Daphne (ASGI — supports WebSockets for real-time updates)
+.\venv\Scripts\python.exe -m daphne -b 0.0.0.0 -p 8000 config.asgi:application
+```
+
+Then open **http://localhost:8000** in your browser.
+
+### 2. Find Your PC's IP Address
+
+The ESP32 needs your PC's LAN IP to connect to the server.
+
+```powershell
+# Get your WiFi/Ethernet IP
+(Get-NetIPAddress -AddressFamily IPv4 | Where-Object {$_.InterfaceAlias -like "*Wi-Fi*" -or $_.InterfaceAlias -like "*Ethernet*"}).IPAddress
+```
+
+Look for the one starting with `192.168.x.x` — that's your LAN IP.
+
+### 3. Setup ESP32 WiFi
+
+1. Power on the ESP32 — it starts in **AP mode** (`CCU-Setup` WiFi network)
+2. Connect your phone/laptop to the `CCU-Setup` WiFi
+3. A captive portal opens (or go to `http://192.168.4.1`)
+4. Click **WiFi Settings** or go to `http://192.168.4.1/settings`
+5. Enter:
+   - **SSID:** Your home WiFi name
+   - **Password:** Your WiFi password
+   - **Server URL:** `http://<Your-PC-IP>:8000` (e.g. `http://192.168.1.192:8000`)
+6. Click **Save** — ESP32 restarts and connects to your WiFi + server
+
+### 4. Kill the Local Server
+
+```powershell
+# If you still have the terminal open:
+# Press Ctrl+C
+
+# If you accidentally closed the terminal:
+taskkill /F /PID (Get-NetTCPConnection -LocalPort 8000 -ErrorAction SilentlyContinue).OwningProcess
+```
+
+### 5. Run Database Migrations
+
+```powershell
+# Generate new migration files
+.\venv\Scripts\python.exe manage.py makemigrations outlets
+
+# Apply migrations to Supabase
+.\venv\Scripts\python.exe manage.py migrate
+```
+
+### 6. Common Commands
+
+| Command | Description |
+|:--------|:------------|
+| `.\venv\Scripts\python.exe -m daphne -b 0.0.0.0 -p 8000 config.asgi:application` | Start server (with WebSocket support) |
+| `.\venv\Scripts\python.exe manage.py runserver 0.0.0.0:8000` | Start server (basic, no WebSocket) |
+| `.\venv\Scripts\python.exe manage.py makemigrations outlets` | Generate migration files |
+| `.\venv\Scripts\python.exe manage.py migrate` | Apply migrations to database |
+| `.\venv\Scripts\python.exe manage.py createsuperuser` | Create admin user |
+| `taskkill /F /PID (Get-NetTCPConnection -LocalPort 8000 -ErrorAction SilentlyContinue).OwningProcess` | Kill server on port 8000 |
+
+---
+
 ## Architecture Overview
 
 ```
