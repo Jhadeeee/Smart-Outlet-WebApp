@@ -1653,17 +1653,26 @@
                         // Update Outlet Data
                         const curAEl = document.getElementById(`cur-a-${payload.device_id}`);
                         const curBEl = document.getElementById(`cur-b-${payload.device_id}`);
+                        // Handle 0xFFFF overload sentinel (65535 = overload, not a real reading)
+                        const isOverloadA = payload.current_a === 65535;
+                        const isOverloadB = payload.current_b === 65535;
 
-                        if (curAEl) curAEl.innerHTML = `${(payload.current_a / 1000.0).toFixed(2)}<span class="unit">A</span>`;
-                        if (curBEl) curBEl.innerHTML = `${(payload.current_b / 1000.0).toFixed(2)}<span class="unit">A</span>`;
+                        if (curAEl) curAEl.innerHTML = isOverloadA
+                            ? `<span style="color: var(--danger-red); font-weight: 700;">OVERLOAD</span>`
+                            : `${(payload.current_a / 1000.0).toFixed(2)}<span class="unit">A</span>`;
+                        if (curBEl) curBEl.innerHTML = isOverloadB
+                            ? `<span style="color: var(--danger-red); font-weight: 700;">OVERLOAD</span>`
+                            : `${(payload.current_b / 1000.0).toFixed(2)}<span class="unit">A</span>`;
 
-                        // Update Outlet subtitle/total amps
+                        // Update Outlet subtitle/total amps (exclude overload sentinel from sum)
                         const cardEl = document.getElementById(`outlet-${payload.device_id}`);
                         if (cardEl) {
                             const subtitleEl = cardEl.querySelector('.outlet-subtitle');
                             const iconEl = cardEl.querySelector('.outlet-icon');
 
-                            const totalAmps = ((payload.current_a + payload.current_b) / 1000.0).toFixed(2);
+                            const realA = isOverloadA ? 0 : payload.current_a;
+                            const realB = isOverloadB ? 0 : payload.current_b;
+                            const totalAmps = ((realA + realB) / 1000.0).toFixed(2);
                             let statusText = 'Inactive';
                             if (payload.is_overload) {
                                 statusText = '<span style="color: var(--danger-red)">OVERLOAD</span>';

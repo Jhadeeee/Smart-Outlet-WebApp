@@ -8,9 +8,9 @@ from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 import json
 
-# How often to persist sensor data to the database (in minutes).
+# How often to persist sensor data to the database.
 # Data is always pushed to WebSocket for real-time UI updates.
-DB_LOG_INTERVAL = timedelta(seconds=30)
+DB_LOG_INTERVAL = timedelta(seconds=60)
 
 @csrf_exempt
 @require_http_methods(["POST"])
@@ -70,32 +70,36 @@ def receive_sensor_data(request):
         # queue_command() when the user toggles from the UI.
         
         # Alerts always fire immediately (critical events)
+        # Format current values — replace 0xFFFF sentinel with "OVERLOAD" label
+        display_a = 'OVERLOAD' if current_a == 65535 else f'{current_a}mA'
+        display_b = 'OVERLOAD' if current_b == 65535 else f'{current_b}mA'
+        
         if is_overload:
             Alert.objects.create(
                 outlet=outlet,
                 alert_type='overload',
-                message=f'Overload trip detected! Current A: {current_a}mA, Current B: {current_b}mA'
+                message=f'Overload trip detected! Socket A: {display_a}, Socket B: {display_b}'
             )
             EventLog.objects.create(
                 user=outlet.user,
                 source='PIC_HARDWARE',
                 action_type='OVERLOAD_TRIPPED',
                 target_device=f'0x{outlet.device_id}',
-                details=f'Overload trip on {outlet.name}! Socket A: {current_a}mA, Socket B: {current_b}mA. Relay auto-cutoff triggered.'
+                details=f'Overload trip on {outlet.name}! Socket A: {display_a}, Socket B: {display_b}. Relay auto-cutoff triggered.'
             )
         
         if outlet.threshold > 0 and (current_a > outlet.threshold or current_b > outlet.threshold):
             Alert.objects.create(
                 outlet=outlet,
                 alert_type='threshold',
-                message=f'Threshold ({outlet.threshold}mA) exceeded! A: {current_a}mA, B: {current_b}mA'
+                message=f'Threshold ({outlet.threshold}mA) exceeded! Socket A: {display_a}, Socket B: {display_b}'
             )
             EventLog.objects.create(
                 user=outlet.user,
                 source='SERVER',
                 action_type='THRESHOLD_EXCEEDED',
                 target_device=f'0x{outlet.device_id}',
-                details=f'Threshold ({outlet.threshold}mA) exceeded on {outlet.name}! Socket A: {current_a}mA, Socket B: {current_b}mA'
+                details=f'Threshold ({outlet.threshold}mA) exceeded on {outlet.name}! Socket A: {display_a}, Socket B: {display_b}'
             )
         
         # DB write: only persist sensor data every DB_LOG_INTERVAL
