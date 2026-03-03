@@ -267,9 +267,11 @@ void loop() {
         // ─── Local Dashboard: AP + HC-12 (no cloud) ─────
         case DeviceMode::LOCAL_DASHBOARD:
             dashboard.handleClient();
-            breakerMonitor.update();
-            outletManager.setLastBreakerMA(
-                breakerMonitor.hasReading() ? breakerMonitor.getMilliAmps() : 0);
+            // Only cache completed RMS readings — prevents noisy intermediate ADC
+            // samples (caused by WiFi activity) from inflating the serial output
+            if (breakerMonitor.update()) {
+                outletManager.setLastBreakerMA(breakerMonitor.getMilliAmps());
+            }
             outletManager.update();
             serialCLI.update();
             break;
