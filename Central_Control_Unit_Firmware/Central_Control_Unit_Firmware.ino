@@ -75,6 +75,8 @@ DeviceMode currentMode = DeviceMode::SETUP;
 // ─── Timing ─────────────────────────────────────────────────
 unsigned long lastCloudSend = 0;
 unsigned int  cloudFailCount = 0;    // Tracks consecutive failures to suppress spam
+unsigned long lastBreakerRead = 0;   // Timer for periodic blocking breaker reads
+const unsigned long BREAKER_READ_INTERVAL = 1500;  // 1.5s — same as dashboard poll
 
 // ─── Factory Reset Check ────────────────────────────────────
 void checkFactoryReset() {
@@ -269,8 +271,13 @@ void loop() {
         // ─── Local Dashboard: AP + HC-12 (no cloud) ─────
         case DeviceMode::LOCAL_DASHBOARD:
             dashboard.handleClient();
-            outletManager.update();      // Serial reads _lastAmps (same value dashboard saw)
-            breakerMonitor.update();     // Update AFTER serial print — new reading for next cycle
+            outletManager.update();
+            // Periodic blocking breaker read — tight 166ms ADC burst, immune to WiFi noise
+            // Same approach as dashboard polling (clean continuous sampling)
+            if (millis() - lastBreakerRead >= BREAKER_READ_INTERVAL) {
+                breakerMonitor.readFresh();
+                lastBreakerRead = millis();
+            }
             serialCLI.update();
             break;
 

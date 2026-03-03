@@ -28,6 +28,12 @@ public:
     bool update();
 
     /**
+     * @brief Blocking read — does a tight 166ms continuous ADC burst.
+     * Immune to WiFi noise. Call periodically (~every 2s) instead of update().
+     */
+    void readFresh();
+
+    /**
      * @brief Get the latest RMS current in Amps.
      */
     double getAmps() const;
