@@ -13,7 +13,7 @@ OutletManager::OutletManager()
       _activeIndex(0),
       _rxIndex(0),
       _lastAckSender(0),
-      _lastBreakerMA(0) {
+      _breakerMonitor(nullptr) {
     // No default device — dashboard starts empty
 }
 
@@ -196,12 +196,15 @@ uint8_t OutletManager::getLastAckSender() const {
     return _lastAckSender;
 }
 
-void OutletManager::setLastBreakerMA(uint16_t mA) {
-    _lastBreakerMA = mA;
+void OutletManager::setBreakerMonitor(BreakerMonitor* monitor) {
+    _breakerMonitor = monitor;
 }
 
-uint16_t OutletManager::getLastBreakerMA() const {
-    return _lastBreakerMA;
+int OutletManager::getLiveBreakerMA() const {
+    if (_breakerMonitor && _breakerMonitor->hasReading()) {
+        return _breakerMonitor->getMilliAmps();
+    }
+    return 0;
 }
 
 // ─── AT Command Passthrough ─────────────────────────────────
@@ -343,7 +346,7 @@ void OutletManager::_parsePacket(const uint8_t* frame) {
         Serial.print("[");
         Serial.print(dev.getName());
         Serial.print("] Breaker: ");
-        Serial.print(_lastBreakerMA);
+        Serial.print(getLiveBreakerMA());
         Serial.print("mA | 0x");
         if (dev.getDeviceId() < 0x10) Serial.print("0");
         Serial.print(dev.getDeviceId(), HEX);

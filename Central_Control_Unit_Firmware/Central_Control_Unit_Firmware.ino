@@ -129,6 +129,7 @@ void enterLocalDashboardMode() {
     outletManager.begin();
     breakerMonitor.begin();
     breakerMonitor.tare();  // Zero-calibrate ADC offset
+    outletManager.setBreakerMonitor(&breakerMonitor);  // Serial reads breaker live
     serialCLI.begin();
     statusLED.setPattern(LEDPattern::SOLID);
 
@@ -196,6 +197,7 @@ void enterRunningMode() {
     dashboard.begin();
     breakerMonitor.begin();
     breakerMonitor.tare();  // Zero-calibrate ADC after WiFi connected
+    outletManager.setBreakerMonitor(&breakerMonitor);  // Serial reads breaker live
 
     Serial.println("\n✓ HC-12 RF + Serial CLI + Dashboard ready.");
     Serial.println("  Dashboard: http://" + wifiManager.getLocalIP().toString() + "/dashboard");
@@ -267,26 +269,8 @@ void loop() {
         // ─── Local Dashboard: AP + HC-12 (no cloud) ─────
         case DeviceMode::LOCAL_DASHBOARD:
             dashboard.handleClient();
-            // Smooth breaker readings — ESP32 WiFi causes ADC noise spikes
-            // that inflate raw RMS readings. Apply EMA to match the stable
-            // behavior the local dashboard displays.
-            if (breakerMonitor.update()) {
-                int raw = breakerMonitor.getMilliAmps();
-                uint16_t prev = outletManager.getLastBreakerMA();
-                if (prev == 0) {
-                    // First reading — use raw value
-                    outletManager.setLastBreakerMA(raw > 0 ? raw : 0);
-                } else {
-                    // Spike filter: if raw is wildly different (>3x), dampen it heavily
-                    int smoothed;
-                    if (raw > (int)prev * 3 || raw < (int)prev / 3) {
-                        smoothed = (int)(prev * 0.95 + raw * 0.05);  // Heavy dampen spike
-                    } else {
-                        smoothed = (int)(prev * 0.8 + raw * 0.2);    // Normal EMA
-                    }
-                    outletManager.setLastBreakerMA(smoothed > 0 ? smoothed : 0);
-                }
-            }
+            // Breaker: just update — serial reads live via setBreakerMonitor
+            breakerMonitor.update();
             outletManager.update();
             serialCLI.update();
             break;
@@ -352,29 +336,15 @@ void loop() {
                 }
 
                 // 1. ALWAYS send Breaker Data (same speed as sensors)
-                // Apply same EMA smoothing as LOCAL_DASHBOARD for serial + cloud
                 if (breakerMonitor.hasReading()) {
-                    int raw = breakerMonitor.getMilliAmps();
-                    uint16_t prev = outletManager.getLastBreakerMA();
-                    int smoothed;
-                    if (prev == 0) {
-                        smoothed = raw > 0 ? raw : 0;
-                    } else if (raw > (int)prev * 3 || raw < (int)prev / 3) {
-                        smoothed = (int)(prev * 0.95 + raw * 0.05);  // Dampen spike
-                    } else {
-                        smoothed = (int)(prev * 0.8 + raw * 0.2);    // Normal EMA
-                    }
-                    if (smoothed < 0) smoothed = 0;
-                    outletManager.setLastBreakerMA(smoothed);
-
                     String hexId = String(outletManager.getSenderID(), HEX);
                     hexId.toUpperCase();
                     String breakerPayload = "{\"ccu_id\":\"";
                     if (outletManager.getSenderID() < 0x10) breakerPayload += "0";
                     breakerPayload += hexId + "\",";
                     
-                    // Send the smoothed value to cloud (not raw)
-                    breakerPayload += "\"current_ma\":" + String(smoothed) + "}";
+                    // Read live value directly — same source as dashboard
+                    breakerPayload += "\"current_ma\":" + String(breakerMonitor.getMilliAmps()) + "}";
                     
                     int res = cloud.sendBreakerData(breakerPayload);
                     if (res != 200 && res != 201) anyFail = true;
