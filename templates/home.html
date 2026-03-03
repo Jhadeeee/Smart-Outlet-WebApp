@@ -1180,7 +1180,7 @@
                     <div class="total-load-card">
                         <div class="total-load-label">Total Load Current</div>
                         <div class="total-load-value" id="totalCurrent">
-                            {{ total_current_amps }}<span class="total-load-unit">A</span>
+                            {{ total_current_ma }}<span class="total-load-unit">mA</span>
                         </div>
                     </div>
 
@@ -1347,7 +1347,7 @@
                                     <div class="socket-info">
                                         <span class="socket-label">Socket A</span>
                                         <span class="socket-current" id="cur-a-{{ item.outlet.device_id }}">
-                                            {{ item.current_a_amps }}<span class="unit">A</span>
+                                            {{ item.current_a_ma }}<span class="unit">mA</span>
                                         </span>
                                     </div>
                                     <label class="toggle-switch">
@@ -1362,7 +1362,7 @@
                                     <div class="socket-info">
                                         <span class="socket-label">Socket B</span>
                                         <span class="socket-current" id="cur-b-{{ item.outlet.device_id }}">
-                                            {{ item.current_b_amps }}<span class="unit">A</span>
+                                            {{ item.current_b_ma }}<span class="unit">mA</span>
                                         </span>
                                     </div>
                                     <label class="toggle-switch">
@@ -1630,7 +1630,7 @@
                         // Update Total Load Current
                         const totalEl = document.getElementById('totalCurrent');
                         if (totalEl && payload.current_amps !== undefined) {
-                            totalEl.innerHTML = `${payload.current_amps.toFixed(2)}<span class="total-load-unit">A</span>`;
+                            totalEl.innerHTML = `${payload.current_ma}<span class="total-load-unit">mA</span>`;
                         }
                     } else {
                         // Update Outlet Data
@@ -1642,10 +1642,10 @@
 
                         if (curAEl) curAEl.innerHTML = isOverloadA
                             ? `<span style="color: var(--danger-red); font-weight: 700;">OVERLOAD</span>`
-                            : `${(payload.current_a / 1000.0).toFixed(2)}<span class="unit">A</span>`;
+                            : `${payload.current_a}<span class="unit">mA</span>`;
                         if (curBEl) curBEl.innerHTML = isOverloadB
                             ? `<span style="color: var(--danger-red); font-weight: 700;">OVERLOAD</span>`
-                            : `${(payload.current_b / 1000.0).toFixed(2)}<span class="unit">A</span>`;
+                            : `${payload.current_b}<span class="unit">mA</span>`;
 
                         // Update Outlet subtitle/total amps (exclude overload sentinel from sum)
                         const cardEl = document.getElementById(`outlet-${payload.device_id}`);
@@ -1655,7 +1655,7 @@
 
                             const realA = isOverloadA ? 0 : payload.current_a;
                             const realB = isOverloadB ? 0 : payload.current_b;
-                            const totalAmps = ((realA + realB) / 1000.0).toFixed(2);
+                            const totalMA = realA + realB;
                             let statusText = 'Inactive';
                             if (payload.is_overload) {
                                 statusText = '<span style="color: var(--danger-red)">OVERLOAD</span>';
@@ -1665,7 +1665,7 @@
                                 iconEl.classList.remove('overload');
                             }
 
-                            if (subtitleEl) subtitleEl.innerHTML = `${totalAmps} A · ${statusText}`;
+                            if (subtitleEl) subtitleEl.innerHTML = `${totalMA} mA · ${statusText}`;
 
                             // Update toggle switch UI
                             const toggleA = cardEl.querySelector('input[onchange*="\'a\'"]');

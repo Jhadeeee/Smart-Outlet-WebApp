@@ -102,9 +102,9 @@ def home_view(request):
             'outlet': outlet,
             'current_a': cur_a,
             'current_b': cur_b,
-            'current_a_amps': round(cur_a / 1000.0, 2),
-            'current_b_amps': round(cur_b / 1000.0, 2),
-            'total_amps': round((cur_a + cur_b) / 1000.0, 2),
+            'current_a_ma': cur_a,
+            'current_b_ma': cur_b,
+            'total_ma': cur_a + cur_b,
             'is_overload': is_overload,
             'has_data': latest is not None,
         })
@@ -127,7 +127,7 @@ def home_view(request):
     context = {
         'user': request.user,
         'outlet_data': outlet_data,
-        'total_current_amps': round(total_current / 1000.0, 2),
+        'total_current_ma': total_current,
         'user_ccus': user_ccus,
         'ccu_id': first_ccu_id,
         'active_count': active_count,
