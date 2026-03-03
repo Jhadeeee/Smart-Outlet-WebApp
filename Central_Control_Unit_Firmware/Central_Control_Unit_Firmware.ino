@@ -74,6 +74,7 @@ DeviceMode currentMode = DeviceMode::SETUP;
 
 // ─── Timing ─────────────────────────────────────────────────
 unsigned long lastCloudSend = 0;
+unsigned long lastLivePrint = 0;     // Timer for [LIVE] serial output in local dashboard
 unsigned int  cloudFailCount = 0;    // Tracks consecutive failures to suppress spam
 
 // ─── Factory Reset Check ────────────────────────────────────
@@ -268,6 +269,31 @@ void loop() {
             outletManager.update();
             breakerMonitor.update();
             serialCLI.update();
+
+            // Periodic [LIVE] serial output (same format as RUNNING mode)
+            if (millis() - lastLivePrint >= CLOUD_SEND_INTERVAL_MS) {
+                lastLivePrint = millis();
+                uint16_t breakerMA = breakerMonitor.hasReading() ? breakerMonitor.getMilliAmps() : 0;
+                for (uint8_t i = 0; i < outletManager.getDeviceCount(); i++) {
+                    OutletDevice& dev = outletManager.getDevice(i);
+                    uint16_t curA = dev.getCurrentA();
+                    uint16_t curB = dev.getCurrentB();
+
+                    Serial.print("[LIVE] Breaker: ");
+                    Serial.print(breakerMA);
+                    Serial.print("mA | 0x");
+                    if (dev.getDeviceId() < 0x10) Serial.print("0");
+                    Serial.print(dev.getDeviceId(), HEX);
+                    Serial.print(": A=");
+                    if (curA == 65535) Serial.print("OVERLOAD"); else { Serial.print(curA); Serial.print("mA"); }
+                    Serial.print(" B=");
+                    if (curB == 65535) Serial.print("OVERLOAD"); else { Serial.print(curB); Serial.print("mA"); }
+                    Serial.print(" | RA: ");
+                    Serial.print(dev.getRelayA() ? "ON" : "OFF");
+                    Serial.print(" RB: ");
+                    Serial.println(dev.getRelayB() ? "ON" : "OFF");
+                }
+            }
             break;
 
         // ─── Running Mode: Cloud + HC-12 communication ──
