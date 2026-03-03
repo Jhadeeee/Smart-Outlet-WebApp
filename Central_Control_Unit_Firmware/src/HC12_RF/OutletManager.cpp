@@ -68,16 +68,13 @@ void OutletManager::sendCommand(uint8_t cmd, uint8_t dataH, uint8_t dataL) {
     for (int i = 0; i < RF_PACKET_SIZE; i++) {
         _hc12.write(buf[i]);
     }
-
-    // Print TX packet to serial monitor
-    RFProtocol::printPacket(pkt, "RAW");
 }
 
 // ─── Convenience Commands ───────────────────────────────────
 void OutletManager::relayOn(uint8_t socket) {
     Serial.print("[TX] Relay ");
     Serial.print(socket == SOCKET_A ? "A" : "B");
-    Serial.print(" ON -> 0x");
+    Serial.print(" ON: 0x");
     Serial.println(_devices[_activeIndex].getDeviceId(), HEX);
     sendCommand(CMD_RELAY_ON, 0x00, socket);
 }
@@ -85,13 +82,13 @@ void OutletManager::relayOn(uint8_t socket) {
 void OutletManager::relayOff(uint8_t socket) {
     Serial.print("[TX] Relay ");
     Serial.print(socket == SOCKET_A ? "A" : "B");
-    Serial.print(" OFF -> 0x");
+    Serial.print(" OFF: 0x");
     Serial.println(_devices[_activeIndex].getDeviceId(), HEX);
     sendCommand(CMD_RELAY_OFF, 0x00, socket);
 }
 
 void OutletManager::readSensors() {
-    Serial.print("[TX] Read Sensors -> 0x");
+    Serial.print("[TX] Read Sensors: 0x");
     Serial.println(_devices[_activeIndex].getDeviceId(), HEX);
     sendCommand(CMD_READ_CURRENT, 0x00, 0x00);
 }
@@ -101,7 +98,7 @@ void OutletManager::setThreshold(unsigned int mA) {
     uint8_t lo = mA & 0xFF;
     Serial.print("[TX] Set Threshold ");
     Serial.print(mA);
-    Serial.print("mA -> 0x");
+    Serial.print("mA: 0x");
     Serial.println(_devices[_activeIndex].getDeviceId(), HEX);
     _devices[_activeIndex].setPendingThreshold(mA);
     sendCommand(CMD_SET_THRESHOLD, hi, lo);
@@ -111,7 +108,7 @@ void OutletManager::setDeviceID(uint8_t newId) {
     Serial.print("[TX] Set Device ID 0x");
     if (newId < 0x10) Serial.print("0");
     Serial.print(newId, HEX);
-    Serial.print(" -> 0x");
+    Serial.print(": 0x");
     Serial.println(_devices[_activeIndex].getDeviceId(), HEX);
     sendCommand(CMD_SET_DEVICE_ID, 0x00, newId);
 }
@@ -120,14 +117,14 @@ void OutletManager::setMasterID(uint8_t newId) {
     Serial.print("[TX] Set Master ID 0x");
     if (newId < 0x10) Serial.print("0");
     Serial.print(newId, HEX);
-    Serial.print(" -> 0x");
+    Serial.print(": 0x");
     Serial.println(_devices[_activeIndex].getDeviceId(), HEX);
     _devices[_activeIndex].setPendingMasterID(newId);
     sendCommand(CMD_SET_ID_MASTER, 0x00, newId);
 }
 
 void OutletManager::ping() {
-    Serial.print("[TX] Ping -> 0x");
+    Serial.print("[TX] Ping: 0x");
     Serial.println(_devices[_activeIndex].getDeviceId(), HEX);
     sendCommand(CMD_PING, 0x00, 0x00);
 }
@@ -143,10 +140,6 @@ void OutletManager::selectDevice(uint8_t deviceId) {
         }
     }
     _activeIndex = idx;
-
-    Serial.print("Target: 0x");
-    if (deviceId < 0x10) Serial.print("0");
-    Serial.println(deviceId, HEX);
 }
 
 OutletDevice& OutletManager::getActiveDevice() {
@@ -356,5 +349,6 @@ void OutletManager::_parsePacket(const uint8_t* frame) {
         Serial.print(dev.getRelayA() ? "ON" : "OFF");
         Serial.print(" RB: ");
         Serial.println(dev.getRelayB() ? "ON" : "OFF");
+        Serial.println();  // Blank line between groups
     }
 }
