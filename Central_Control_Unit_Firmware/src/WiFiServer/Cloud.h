@@ -31,6 +31,9 @@ public:
     // Fetch registered device list from server (GET request)
     String fetchDevices();
 
+    // Fetch the currently focused device from server (GET request)
+    String fetchFocusDevice();
+
     // Check if server is reachable (GET request)
     bool isReachable();
 

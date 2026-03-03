@@ -334,45 +334,7 @@ void loop() {
                     }
                 }
 
-                // 1. Request fresh sensor data & Send to Cloud
-                for (uint8_t i = 0; i < outletManager.getDeviceCount(); i++) {
-                    OutletDevice& dev = outletManager.getDevice(i);
-                    
-                    // Request fresh data from PIC
-                    outletManager.selectDevice(dev.getDeviceId());
-                    
-                    // Flush any stale data from previous devices in the RX buffer
-                    while(outletManager.getHC12().available()) {
-                        outletManager.getHC12().read();
-                    }
-                    
-                    outletManager.readSensors();
-                    
-                    // Briefly pump the RF receiver to catch the PIC's replies (Socket A & B)
-                    // Increased from 150ms to 350ms to allow both packets to fully arrive
-                    unsigned long waitStart = millis();
-                    while (millis() - waitStart < 350) {
-                        outletManager.update();
-                    }
-
-                    String hexId = String(dev.getDeviceId(), HEX);
-                    hexId.toUpperCase();
-                    String payload = "{\"device_id\":\"";
-                    if (dev.getDeviceId() < 0x10) payload += "0";
-                    payload += hexId + "\",";
-                    
-                    payload += "\"current_a\":" + String(dev.getCurrentA()) + ",";
-                    payload += "\"current_b\":" + String(dev.getCurrentB()) + ",";
-                    payload += "\"relay_a\":" + String(dev.getRelayA() == 1 ? "true" : "false") + ",";
-                    payload += "\"relay_b\":" + String(dev.getRelayB() == 1 ? "true" : "false") + ",";
-                    bool isOverload = (dev.getCurrentA() == 65535 || dev.getCurrentB() == 65535);
-                    payload += "\"is_overload\":" + String(isOverload ? "true" : "false") + "}";
-                    
-                    int res = cloud.sendSensorData(payload);
-                    if (res != 200 && res != 201) anyFail = true;
-                }
-
-                // 2. Send Breaker Data
+                // 1. ALWAYS send Breaker Data (same speed as sensors)
                 if (breakerMonitor.hasReading()) {
                     String hexId = String(outletManager.getSenderID(), HEX);
                     hexId.toUpperCase();
@@ -386,78 +348,135 @@ void loop() {
                     if (res != 200 && res != 201) anyFail = true;
                 }
 
-                // 3. Fetch and Execute Commands
-                for (uint8_t i = 0; i < outletManager.getDeviceCount(); i++) {
-                    OutletDevice& dev = outletManager.getDevice(i);
-                    String devIdStr = String(dev.getDeviceId(), HEX);
-                    devIdStr.toUpperCase();
-                    if (dev.getDeviceId() < 0x10) devIdStr = "0" + devIdStr;
-                    
-                    String jsonCommands = cloud.fetchCommands(devIdStr);
-                    
-                    if (jsonCommands.indexOf("\"success\": true") >= 0 || jsonCommands.indexOf("\"success\":true") >= 0) {
-                        int startIdx = 0;
-                        while (true) {
-                            startIdx = jsonCommands.indexOf("{\"command\":", startIdx);
-                            if (startIdx < 0) break;
-                            int endIdx = jsonCommands.indexOf("}", startIdx);
-                            if (endIdx < 0) break;
-                            
-                            String cmdObj = jsonCommands.substring(startIdx, endIdx);
-                            
-                            // Extract command
-                            String cmd = "";
-                            int cmdStart = cmdObj.indexOf("\"command\": \"");
-                            if (cmdStart >= 0) {
-                                cmdStart += 12;
-                                int cmdEnd = cmdObj.indexOf("\"", cmdStart);
-                                if (cmdEnd >= 0) cmd = cmdObj.substring(cmdStart, cmdEnd);
-                            }
-                            
-                            // Extract socket
-                            String socketStr = "";
-                            int sockStart = cmdObj.indexOf("\"socket\": \"");
-                            if (sockStart >= 0) {
-                                sockStart += 11;
-                                int sockEnd = cmdObj.indexOf("\"", sockStart);
-                                if (sockEnd >= 0) socketStr = cmdObj.substring(sockStart, sockEnd);
-                            }
-                            
-                            // Extract value
-                            int value = 0;
-                            int valStart = cmdObj.indexOf("\"value\":");
-                            if (valStart >= 0) {
-                                valStart += 8;
-                                int valEnd = cmdObj.indexOf(",", valStart);
-                                if (valEnd < 0) valEnd = cmdObj.length(); 
-                                String valStr = cmdObj.substring(valStart, valEnd);
-                                valStr.trim();
-                                if (valStr != "null") value = valStr.toInt();
-                            }
-                            
-                            // Execute physical command via HC-12
-                            outletManager.selectDevice(dev.getDeviceId());
-                            if (cmd == "relay_on") {
-                                outletManager.relayOn(socketStr == "a" ? SOCKET_A : SOCKET_B);
-                                delay(100);
-                            } else if (cmd == "relay_off") {
-                                outletManager.relayOff(socketStr == "a" ? SOCKET_A : SOCKET_B);
-                                delay(100);
-                            } else if (cmd == "set_threshold" && value > 0) {
-                                outletManager.setThreshold(value);
-                                delay(100);
-                            }
-                            
-                            startIdx = endIdx + 1;
-                        }
-                    } else if (jsonCommands.length() > 0) {
-                         anyFail = true;
-                    }
-                }
-
                 // Feed breaker cache so [PIC X] lines include it
                 outletManager.setLastBreakerMA(
                     breakerMonitor.hasReading() ? breakerMonitor.getMilliAmps() : 0);
+
+                // 2. Fetch focused device from Django
+                String focusJson = cloud.fetchFocusDevice();
+                focusJson.replace(" ", "");
+                String focusedId = "";
+                
+                // Parse: {"success":true,"device_id":"03"} or {"success":true,"device_id":null}
+                if (focusJson.indexOf("\"device_id\":\"") >= 0) {
+                    int idStart = focusJson.indexOf("\"device_id\":\"") + 13;
+                    int idEnd = focusJson.indexOf("\"", idStart);
+                    if (idEnd > idStart) {
+                        focusedId = focusJson.substring(idStart, idEnd);
+                    }
+                }
+
+                // 3. Only read sensors for the focused device
+                if (focusedId.length() > 0) {
+                    uint8_t focusId = (uint8_t)strtol(focusedId.c_str(), NULL, 16);
+                    
+                    // Find the device
+                    int devIdx = -1;
+                    for (uint8_t i = 0; i < outletManager.getDeviceCount(); i++) {
+                        if (outletManager.getDevice(i).getDeviceId() == focusId) {
+                            devIdx = i;
+                            break;
+                        }
+                    }
+
+                    if (devIdx >= 0) {
+                        OutletDevice& dev = outletManager.getDevice(devIdx);
+                        outletManager.selectDevice(dev.getDeviceId());
+                        
+                        // Flush stale RX data
+                        while(outletManager.getHC12().available()) {
+                            outletManager.getHC12().read();
+                        }
+                        
+                        outletManager.readSensors();
+                        
+                        // Wait for PIC replies (Socket A & B)
+                        unsigned long waitStart = millis();
+                        while (millis() - waitStart < 350) {
+                            outletManager.update();
+                        }
+
+                        // Send sensor data to cloud
+                        String hexId = String(dev.getDeviceId(), HEX);
+                        hexId.toUpperCase();
+                        String payload = "{\"device_id\":\"";
+                        if (dev.getDeviceId() < 0x10) payload += "0";
+                        payload += hexId + "\",";
+                        
+                        payload += "\"current_a\":" + String(dev.getCurrentA()) + ",";
+                        payload += "\"current_b\":" + String(dev.getCurrentB()) + ",";
+                        payload += "\"relay_a\":" + String(dev.getRelayA() == 1 ? "true" : "false") + ",";
+                        payload += "\"relay_b\":" + String(dev.getRelayB() == 1 ? "true" : "false") + ",";
+                        bool isOverload = (dev.getCurrentA() == 65535 || dev.getCurrentB() == 65535);
+                        payload += "\"is_overload\":" + String(isOverload ? "true" : "false") + "}";
+                        
+                        int res = cloud.sendSensorData(payload);
+                        if (res != 200 && res != 201) anyFail = true;
+
+                        // Fetch commands only for the focused device
+                        String devIdStr = String(dev.getDeviceId(), HEX);
+                        devIdStr.toUpperCase();
+                        if (dev.getDeviceId() < 0x10) devIdStr = "0" + devIdStr;
+                        
+                        String jsonCommands = cloud.fetchCommands(devIdStr);
+                        
+                        if (jsonCommands.indexOf("\"success\": true") >= 0 || jsonCommands.indexOf("\"success\":true") >= 0) {
+                            int startIdx = 0;
+                            while (true) {
+                                startIdx = jsonCommands.indexOf("{\"command\":", startIdx);
+                                if (startIdx < 0) break;
+                                int endIdx = jsonCommands.indexOf("}", startIdx);
+                                if (endIdx < 0) break;
+                                
+                                String cmdObj = jsonCommands.substring(startIdx, endIdx);
+                                
+                                String cmd = "";
+                                int cmdStart = cmdObj.indexOf("\"command\": \"");
+                                if (cmdStart >= 0) {
+                                    cmdStart += 12;
+                                    int cmdEnd = cmdObj.indexOf("\"", cmdStart);
+                                    if (cmdEnd >= 0) cmd = cmdObj.substring(cmdStart, cmdEnd);
+                                }
+                                
+                                String socketStr = "";
+                                int sockStart = cmdObj.indexOf("\"socket\": \"");
+                                if (sockStart >= 0) {
+                                    sockStart += 11;
+                                    int sockEnd = cmdObj.indexOf("\"", sockStart);
+                                    if (sockEnd >= 0) socketStr = cmdObj.substring(sockStart, sockEnd);
+                                }
+                                
+                                int value = 0;
+                                int valStart = cmdObj.indexOf("\"value\":");
+                                if (valStart >= 0) {
+                                    valStart += 8;
+                                    int valEnd = cmdObj.indexOf(",", valStart);
+                                    if (valEnd < 0) valEnd = cmdObj.length(); 
+                                    String valStr = cmdObj.substring(valStart, valEnd);
+                                    valStr.trim();
+                                    if (valStr != "null") value = valStr.toInt();
+                                }
+                                
+                                outletManager.selectDevice(dev.getDeviceId());
+                                if (cmd == "relay_on") {
+                                    outletManager.relayOn(socketStr == "a" ? SOCKET_A : SOCKET_B);
+                                    delay(100);
+                                } else if (cmd == "relay_off") {
+                                    outletManager.relayOff(socketStr == "a" ? SOCKET_A : SOCKET_B);
+                                    delay(100);
+                                } else if (cmd == "set_threshold" && value > 0) {
+                                    outletManager.setThreshold(value);
+                                    delay(100);
+                                }
+                                
+                                startIdx = endIdx + 1;
+                            }
+                        } else if (jsonCommands.length() > 0) {
+                            anyFail = true;
+                        }
+                    }
+                }
+                // If no device focused → skip sensor reads entirely (silent)
 
                 // Connection monitoring
                 if (!anyFail) {

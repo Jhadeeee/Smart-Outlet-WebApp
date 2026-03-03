@@ -36,6 +36,7 @@ class CentralControlUnit(models.Model):
     location = models.CharField(max_length=100, blank=True)
     ip_address = models.GenericIPAddressField(null=True, blank=True, help_text="Last known LAN IP of this ESP32")
     last_seen = models.DateTimeField(null=True, blank=True, help_text="Last time this CCU contacted the server")
+    focused_device = models.CharField(max_length=10, blank=True, default='', help_text="Currently expanded outlet device_id (hex)")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

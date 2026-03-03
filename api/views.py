@@ -540,3 +540,66 @@ def log_event(request):
         return JsonResponse({'success': True, 'message': 'Event logged'})
     except Exception as e:
         return JsonResponse({'success': False, 'message': str(e)}, status=500)
+
+
+# ═══════════════════════════════════════════════════════════
+#   FOCUS DEVICE — Which outlet the user is currently viewing
+# ═══════════════════════════════════════════════════════════
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def set_focus_device(request, device_id):
+    """
+    Set the focused device for the CCU.
+    URL: POST /api/focus/<device_id>/
+    Called when user expands a device card on the web dashboard.
+    """
+    device_id = device_id.upper()
+    
+    # Find the CCU (use first available — single-CCU setup)
+    ccu = CentralControlUnit.objects.first()
+    if not ccu:
+        return JsonResponse({'success': False, 'message': 'No CCU registered'}, status=404)
+    
+    # Verify the outlet exists
+    if not Outlet.objects.filter(device_id__iexact=device_id).exists():
+        return JsonResponse({'success': False, 'message': f'Outlet {device_id} not found'}, status=404)
+    
+    ccu.focused_device = device_id
+    ccu.save(update_fields=['focused_device'])
+    
+    return JsonResponse({'success': True, 'device_id': device_id})
+
+
+@csrf_exempt
+@require_http_methods(["POST", "DELETE"])
+def clear_focus_device(request):
+    """
+    Clear the focused device (no outlet expanded).
+    URL: POST /api/focus/clear/ or DELETE /api/focus/clear/
+    Called when user collapses a device card.
+    """
+    ccu = CentralControlUnit.objects.first()
+    if not ccu:
+        return JsonResponse({'success': False, 'message': 'No CCU registered'}, status=404)
+    
+    ccu.focused_device = ''
+    ccu.save(update_fields=['focused_device'])
+    
+    return JsonResponse({'success': True, 'device_id': None})
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def get_focus_device(request):
+    """
+    Get the currently focused device.
+    URL: GET /api/focus/
+    ESP32 polls this to know which device to read sensors for.
+    """
+    ccu = CentralControlUnit.objects.first()
+    if not ccu:
+        return JsonResponse({'success': True, 'device_id': None})
+    
+    focused = ccu.focused_device if ccu.focused_device else None
+    return JsonResponse({'success': True, 'device_id': focused})
