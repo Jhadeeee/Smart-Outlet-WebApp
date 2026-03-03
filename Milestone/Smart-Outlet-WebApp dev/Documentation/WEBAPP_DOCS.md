@@ -1,7 +1,7 @@
 # Smart-Outlet-WebApp — Developer Documentation
 
 **Framework:** Django 5.2 · **ASGI Server:** Daphne · **Database:** PostgreSQL  
-**Real-Time:** Django Channels (WebSockets) · **Version:** v1.2.0
+**Real-Time:** Django Channels (WebSockets) · **Version:** v1.3.0
 
 ---
 
@@ -183,6 +183,7 @@ taskkill /F /PID (Get-NetTCPConnection -LocalPort 8000 -ErrorAction SilentlyCont
 | `location`   | CharField    | `""`       | Optional location               |
 | `ip_address` | GenericIP    | null       | ESP32's LAN IP (auto-captured)  |
 | `last_seen`  | DateTime     | null       | Last data push timestamp        |
+| `focused_device` | CharField | `""`       | Currently expanded outlet (hex) |
 | `created_at` | DateTime     | auto       | Registration timestamp          |
 
 > **IP Capture:** The ESP32's IP is automatically captured from every `/api/data/` and `/api/breaker-data/` POST. This enables direct communication.
@@ -217,6 +218,14 @@ Audit log for tracking user actions and system events.
 |:-------|:------------------------------|:------------------------|:------------------------------------|
 | GET    | `/api/commands/<device_id>/`  | `get_pending_commands`  | `{success, commands: [{command, socket, value}]}` |
 | GET    | `/api/devices/`               | `get_registered_outlets`| `{success, devices: ["FE", "FD"]}` |
+
+### Focus Device (Expand/Collapse)
+
+| Method | Route                         | Function                | Notes                               |
+|:-------|:------------------------------|:------------------------|:------------------------------------|
+| GET    | `/api/focus/`                 | `get_focus_device`      | Returns `{success, device_id}` — ESP32 polls this |
+| POST   | `/api/focus/<device_id>/`     | `set_focus_device`      | Sets focused device (expand)        |
+| POST   | `/api/focus/clear/`           | `clear_focus_device`    | Clears focus (collapse)             |
 
 ### UI → Django (User Actions)
 
@@ -414,3 +423,5 @@ Example: `http://10.31.253.107:8000`
 | **Direct fallback** | If ESP32 is unreachable for direct HTTP, Django silently falls back to `PendingCommand` queue (~2s delay). |
 | **Stale IP** | ESP32 IP is updated on every sensor push. If the IP changes, the next push auto-corrects it. |
 | **Current display** | Current values are displayed in milliamperes (mA) without rounding for higher precision. |
+| **Focus Device** | Only the expanded outlet receives sensor reads. Collapsed outlets show `0 mA` with disabled toggles. ESP32 polls `/api/focus/` every 2s. |
+| **Last-write-wins** | If two users expand different outlets, the last expansion wins. All users see the same focused device. |

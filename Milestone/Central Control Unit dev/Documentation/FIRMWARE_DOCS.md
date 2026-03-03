@@ -1,7 +1,7 @@
 # Central Control Unit (CCU) Firmware — Developer Documentation
 
 **MCU:** ESP32 · **Framework:** Arduino · **IDE:** Arduino IDE / PlatformIO  
-**Firmware:** v4.1.0 · **Communication:** HC-12 433MHz RF + WiFi
+**Firmware:** v4.2.0 · **Communication:** HC-12 433MHz RF + WiFi
 
 ---
 
@@ -131,9 +131,10 @@ The loop runs the active mode's subsystems:
 ### RUNNING Mode
 - All LOCAL_DASHBOARD tasks, plus:
 - WiFi reconnection — if disconnected, retries connection or falls back to SETUP
-- Cloud data push — sends JSON payload to server every 10 seconds
+- Cloud data push — sends JSON payload to server every 2 seconds
 - Cloud failure tracking — logs first failure, then reminders every ~60s
 - Feeds breaker reading cache to OutletManager for serial output
+- **Focus Device** — polls `/api/focus/` each cycle, only reads sensors for the focused device. If no device is focused, sensor reads are skipped entirely (breaker always sends).
 
 ---
 
