@@ -34,6 +34,8 @@ class CentralControlUnit(models.Model):
     ccu_id = models.CharField(max_length=10, unique=True, help_text="CCU device ID, e.g. '01'")
     name = models.CharField(max_length=100, default='My CCU')
     location = models.CharField(max_length=100, blank=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True, help_text="Last known LAN IP of this ESP32")
+    last_seen = models.DateTimeField(null=True, blank=True, help_text="Last time this CCU contacted the server")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -48,6 +50,8 @@ class CentralControlUnit(models.Model):
 class Outlet(models.Model):
     """Smart Outlet Device Model — matches CCU firmware OutletDevice"""
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='outlets')
+    ccu = models.ForeignKey(CentralControlUnit, null=True, blank=True, on_delete=models.SET_NULL,
+                            related_name='outlets', help_text="Parent CCU (auto-set when ESP32 sends data)")
     name = models.CharField(max_length=100)
     device_id = models.CharField(max_length=10, unique=True, help_text="Hex device ID, e.g. 'FE'")
     location = models.CharField(max_length=100, blank=True)
@@ -172,3 +176,25 @@ class PendingCommand(models.Model):
     
     def __str__(self):
         return f"{self.command} → {self.outlet.name} ({self.created_at.strftime('%H:%M:%S')})"
+
+
+class EventLog(models.Model):
+    """
+    Audit log for tracking user actions and system events.
+    Used for debugging and activity history.
+    """
+    user = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='event_logs')
+    source = models.CharField(max_length=30, help_text="e.g. WEB_DASHBOARD, PIC_HARDWARE, SERVER")
+    action_type = models.CharField(max_length=30, help_text="e.g. TOGGLE_RELAY, OVERLOAD_TRIPPED, SET_THRESHOLD")
+    target_device = models.CharField(max_length=20, blank=True, help_text="e.g. 0xFE, All Devices")
+    details = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['-created_at']),
+        ]
+
+    def __str__(self):
+        return f"[{self.source}] {self.action_type} — {self.target_device} ({self.created_at.strftime('%H:%M:%S')})"

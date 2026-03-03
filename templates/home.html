@@ -1522,20 +1522,44 @@
 
                 const data = await response.json();
                 if (data.success) {
-                    showToast(data.message || 'Command sent successfully', 'success');
+                    const type = data.direct ? 'success' : 'success';
+                    showToast(data.message || 'Command sent successfully', type);
                 } else {
                     showToast(data.message || 'Failed to send command', 'error');
                 }
+                return data;
             } catch (error) {
                 showToast('Network error. Please try again.', 'error');
+                return { success: false };
             }
         }
 
         // ─── Toggle Relay ───
         async function toggleRelay(deviceId, socket, state) {
-            // Using the new generic command structure via the API
             const command = state ? 'relay_on' : 'relay_off';
-            await sendCommand(deviceId, command, socket);
+
+            // Find the toggle switch and add loading state
+            const cardEl = document.getElementById(`outlet-${deviceId}`);
+            const selector = `input[onchange*="'${socket}'"]`;
+            const toggle = cardEl ? cardEl.querySelector(selector) : null;
+            const toggleParent = toggle ? toggle.closest('.toggle-switch') : null;
+
+            if (toggleParent) {
+                toggleParent.style.opacity = '0.5';
+                toggleParent.style.pointerEvents = 'none';
+            }
+
+            const result = await sendCommand(deviceId, command, socket);
+
+            if (toggleParent) {
+                toggleParent.style.opacity = '1';
+                toggleParent.style.pointerEvents = '';
+            }
+
+            // Revert toggle if command failed
+            if (!result.success && toggle) {
+                toggle.checked = !state;
+            }
         }
 
         // ─── Set Cut All Power ───

@@ -451,19 +451,41 @@ void loop() {
                     }
                 }
 
-                // Connection monitoring logic
+                // ── Clean serial output: one line per device ──
+                uint16_t breakerMA = breakerMonitor.hasReading() ? breakerMonitor.getMilliAmps() : 0;
+                for (uint8_t i = 0; i < outletManager.getDeviceCount(); i++) {
+                    OutletDevice& dev = outletManager.getDevice(i);
+                    uint16_t curA = dev.getCurrentA();
+                    uint16_t curB = dev.getCurrentB();
+
+                    Serial.print("[LIVE] Breaker: ");
+                    Serial.print(breakerMA);
+                    Serial.print("mA | 0x");
+                    if (dev.getDeviceId() < 0x10) Serial.print("0");
+                    Serial.print(dev.getDeviceId(), HEX);
+                    Serial.print(": A=");
+                    if (curA == 65535) Serial.print("OVERLOAD"); else { Serial.print(curA); Serial.print("mA"); }
+                    Serial.print(" B=");
+                    if (curB == 65535) Serial.print("OVERLOAD"); else { Serial.print(curB); Serial.print("mA"); }
+                    Serial.print(" | RA: ");
+                    Serial.print(dev.getRelayA() ? "ON" : "OFF");
+                    Serial.print(" RB: ");
+                    Serial.println(dev.getRelayB() ? "ON" : "OFF");
+                }
+
+                // Connection monitoring
                 if (!anyFail) {
                     if (cloudFailCount > 0) {
-                        Serial.println("✓ Cloud connection restored.");
+                        Serial.println("[CLOUD] Connection restored.");
                     }
                     cloudFailCount = 0;
                     statusLED.setPattern(LEDPattern::SOLID);
                 } else {
                     cloudFailCount++;
                     if (cloudFailCount == 1) {
-                        Serial.println("✗ Cloud communication issue. Retrying silently...");
+                        Serial.println("[CLOUD] Communication issue. Retrying...");
                     } else if (cloudFailCount % 6 == 0) {
-                        Serial.println("✗ Cloud communication issue (" + String(cloudFailCount) + " attempts).");
+                        Serial.println("[CLOUD] Still failing (" + String(cloudFailCount) + " attempts).");
                     }
                     statusLED.setPattern(LEDPattern::SOLID);
                 }

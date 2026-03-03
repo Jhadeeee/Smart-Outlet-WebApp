@@ -70,6 +70,11 @@ private:
     void _handleApiBreakerThreshold();  // POST /api/breaker/threshold?value=15000
     void _handleApiBreakerCutDevice();  // POST /api/breaker/cut?index=0 (or index=all)
 
+    // ─── External API (called by Django server) ──
+    void _handleExtRelay();             // POST /api/ext/relay
+    void _handleExtThreshold();         // POST /api/ext/threshold
+    void _handleExtPing();              // GET  /api/ext/ping
+
     // ─── HTML Builders ───────────────────────────
     String _buildDashboardPage();
     String _buildSettingsPage();

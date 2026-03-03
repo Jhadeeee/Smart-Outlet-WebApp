@@ -2,15 +2,59 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.utils import timezone
-from datetime import timedelta
 from outlets.models import Outlet, SensorData, Alert, PendingCommand, MainBreakerReading, CentralControlUnit, EventLog
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 import json
+import requests as http_requests
+from datetime import timedelta
 
 # How often to persist sensor data to the database.
 # Data is always pushed to WebSocket for real-time UI updates.
 DB_LOG_INTERVAL = timedelta(seconds=60)
+
+# How recent the CCU must have been seen to attempt direct HTTP
+DIRECT_CMD_TIMEOUT = timedelta(seconds=30)
+DIRECT_CMD_HTTP_TIMEOUT = 3  # seconds
+
+
+def _get_client_ip(request):
+    """Extract the real client IP from the request."""
+    x_forwarded = request.META.get('HTTP_X_FORWARDED_FOR')
+    if x_forwarded:
+        return x_forwarded.split(',')[0].strip()
+    return request.META.get('REMOTE_ADDR')
+
+
+def _update_ccu_ip(ccu_obj, ip):
+    """Update a CCU's IP address and last_seen timestamp."""
+    if ccu_obj:
+        ccu_obj.ip_address = ip
+        ccu_obj.last_seen = timezone.now()
+        ccu_obj.save(update_fields=['ip_address', 'last_seen'])
+
+
+def _send_direct_to_esp32(ip, device_id, command, socket='', value=None):
+    """
+    Send a command directly to the ESP32's local web server.
+    Returns (success: bool, response_data: dict or None).
+    """
+    try:
+        url = f'http://{ip}/api/ext/relay'
+        payload = {
+            'device_id': device_id,
+            'command': command,
+            'socket': socket,
+        }
+        if value is not None:
+            payload['value'] = str(value)
+
+        resp = http_requests.post(url, data=payload, timeout=DIRECT_CMD_HTTP_TIMEOUT)
+        if resp.status_code == 200:
+            return True, resp.json()
+        return False, None
+    except Exception:
+        return False, None
 
 @csrf_exempt
 @require_http_methods(["POST"])
@@ -53,6 +97,19 @@ def receive_sensor_data(request):
                 'success': False,
                 'message': f'Outlet with device_id {data["device_id"]} not found'
             }, status=404)
+
+        # Auto-capture ESP32 IP and link outlet to CCU
+        client_ip = _get_client_ip(request)
+        # Try to find which CCU is sending — use breaker data's ccu_id or first user CCU
+        if not outlet.ccu:
+            # Auto-link: find a CCU owned by the same user
+            ccu_obj = CentralControlUnit.objects.filter(user=outlet.user).first()
+            if ccu_obj:
+                outlet.ccu = ccu_obj
+                outlet.save(update_fields=['ccu'])
+                _update_ccu_ip(ccu_obj, client_ip)
+        else:
+            _update_ccu_ip(outlet.ccu, client_ip)
         
         # Parse values
         is_overload = data.get('is_overload', False)
@@ -187,8 +244,9 @@ def receive_breaker_data(request):
         current_ma = int(data['current_ma'])
         now = timezone.now()
         
-        # Look up registered CCU (if exists)
+        # Look up registered CCU (if exists) and capture IP
         ccu_obj = CentralControlUnit.objects.filter(ccu_id=ccu_id).first()
+        _update_ccu_ip(ccu_obj, _get_client_ip(request))
         
         # DB write: only persist every DB_LOG_INTERVAL
         saved_to_db = False
@@ -287,44 +345,80 @@ def queue_command(request, device_id, command):
                 value = int(value)
             except ValueError:
                 return JsonResponse({'success': False, 'message': 'Invalid value format'}, status=400)
-                
-        # Optimization: Clear any existing unexecuted identical commands to prevent queue bloat
-        PendingCommand.objects.filter(
-            outlet=outlet, 
-            command=command, 
-            socket=socket, 
-            is_executed=False
-        ).delete()
-        
-        # Create the new pending command
-        PendingCommand.objects.create(
-            outlet=outlet,
-            command=command,
-            socket=socket,
-            value=value
-        )
-        
-        # If toggling relay, optionally update model speculatively
-        # so the UI gets instant feedback on refresh before polling catches up
-        if command == 'relay_on' or command == 'relay_off':
+        # If toggling relay, attempt direct HTTP to ESP32 first
+        if command in ('relay_on', 'relay_off'):
             state = True if command == 'relay_on' else False
             state_label = 'ON' if state else 'OFF'
-            if socket == 'a':
-                outlet.relay_a = state
-                outlet.save(update_fields=['relay_a', 'updated_at'])
-            elif socket == 'b':
-                outlet.relay_b = state
-                outlet.save(update_fields=['relay_b', 'updated_at'])
-            
-            EventLog.objects.create(
-                user=request.user,
-                source='WEB_DASHBOARD',
-                action_type='TOGGLE_RELAY',
-                target_device=f'0x{outlet.device_id}',
-                details=f'Socket {socket.upper()} turned {state_label} on {outlet.name}'
-            )
+            direct_success = False
+
+            # Try direct communication if CCU is known and recently online
+            if outlet.ccu and outlet.ccu.ip_address and outlet.ccu.last_seen:
+                age = timezone.now() - outlet.ccu.last_seen
+                if age < DIRECT_CMD_TIMEOUT:
+                    direct_success, resp_data = _send_direct_to_esp32(
+                        outlet.ccu.ip_address, device_id, command, socket
+                    )
+
+            if direct_success:
+                # ESP32 confirmed — update DB with real state
+                if socket == 'a':
+                    outlet.relay_a = state
+                    outlet.save(update_fields=['relay_a', 'updated_at'])
+                elif socket == 'b':
+                    outlet.relay_b = state
+                    outlet.save(update_fields=['relay_b', 'updated_at'])
+
+                EventLog.objects.create(
+                    user=request.user,
+                    source='WEB_DASHBOARD',
+                    action_type='TOGGLE_RELAY',
+                    target_device=f'0x{outlet.device_id}',
+                    details=f'Socket {socket.upper()} turned {state_label} on {outlet.name} (direct)'
+                )
+                return JsonResponse({'success': True, 'message': f'Socket {socket.upper()} turned {state_label} (confirmed)', 'direct': True})
+            else:
+                # Fallback — queue PendingCommand for polling
+                PendingCommand.objects.filter(
+                    outlet=outlet, command=command, socket=socket, is_executed=False
+                ).delete()
+                PendingCommand.objects.create(
+                    outlet=outlet, command=command, socket=socket, value=value
+                )
+                # Speculative DB update
+                if socket == 'a':
+                    outlet.relay_a = state
+                    outlet.save(update_fields=['relay_a', 'updated_at'])
+                elif socket == 'b':
+                    outlet.relay_b = state
+                    outlet.save(update_fields=['relay_b', 'updated_at'])
+
+                EventLog.objects.create(
+                    user=request.user,
+                    source='WEB_DASHBOARD',
+                    action_type='TOGGLE_RELAY',
+                    target_device=f'0x{outlet.device_id}',
+                    details=f'Socket {socket.upper()} turned {state_label} on {outlet.name} (queued)'
+                )
+                return JsonResponse({'success': True, 'message': f'Command queued — will execute within 2s', 'direct': False})
                 
         elif command == 'set_threshold' and value is not None:
+            # Try direct for threshold too
+            direct_success = False
+            if outlet.ccu and outlet.ccu.ip_address and outlet.ccu.last_seen:
+                age = timezone.now() - outlet.ccu.last_seen
+                if age < DIRECT_CMD_TIMEOUT:
+                    direct_success, _ = _send_direct_to_esp32(
+                        outlet.ccu.ip_address, device_id, command, '', value
+                    )
+
+            if not direct_success:
+                PendingCommand.objects.filter(
+                    outlet=outlet, command=command, is_executed=False
+                ).delete()
+                PendingCommand.objects.create(
+                    outlet=outlet, command=command, socket=socket, value=value
+                )
+
             outlet.threshold = value
             outlet.save(update_fields=['threshold', 'updated_at'])
             
@@ -333,10 +427,21 @@ def queue_command(request, device_id, command):
                 source='WEB_DASHBOARD',
                 action_type='SET_THRESHOLD',
                 target_device=f'0x{outlet.device_id}',
-                details=f'Threshold set to {value}mA on {outlet.name}'
+                details=f'Threshold set to {value}mA on {outlet.name}{" (direct)" if direct_success else " (queued)"}'
+            )
+            method = 'direct' if direct_success else 'queued'
+            return JsonResponse({'success': True, 'message': f'Threshold set to {value}mA ({method})', 'direct': direct_success})
+
+        else:
+            # Other commands (read_sensors, ping) — always queue
+            PendingCommand.objects.filter(
+                outlet=outlet, command=command, socket=socket, is_executed=False
+            ).delete()
+            PendingCommand.objects.create(
+                outlet=outlet, command=command, socket=socket, value=value
             )
             
-        return JsonResponse({'success': True, 'message': f'Command {command} queued successfully'})
+        return JsonResponse({'success': True, 'message': f'Command {command} queued successfully', 'direct': False})
         
     except Outlet.DoesNotExist:
         return JsonResponse({'success': False, 'message': 'Outlet not found or unauthorized'}, status=404)

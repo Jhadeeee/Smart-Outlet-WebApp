@@ -39,6 +39,11 @@ void Dashboard::begin() {
     _server.on("/api/breaker/threshold", HTTP_POST, [this]() { _handleApiBreakerThreshold(); });
     _server.on("/api/breaker/cut",       HTTP_POST, [this]() { _handleApiBreakerCutDevice(); });
 
+    // External API (called by Django server)
+    _server.on("/api/ext/relay",     HTTP_POST, [this]() { _handleExtRelay(); });
+    _server.on("/api/ext/threshold", HTTP_POST, [this]() { _handleExtThreshold(); });
+    _server.on("/api/ext/ping",      HTTP_GET,  [this]() { _handleExtPing(); });
+
     _server.begin();
     Serial.println("[Dashboard] Web server started on port " + String(WEB_SERVER_PORT));
 }
@@ -418,6 +423,112 @@ void Dashboard::_handleApiBreakerCutDevice() {
         Serial.println(_manager.getDevice(index).getName());
         _server.send(200, "application/json", "{\"ok\":true}");
     }
+}
+
+// ════════════════════════════════════════════════════════════
+//  EXTERNAL API (called by Django server)
+// ════════════════════════════════════════════════════════════
+
+void Dashboard::_handleExtRelay() {
+    String deviceIdStr = _server.arg("device_id");
+    String command     = _server.arg("command");
+    String socketStr   = _server.arg("socket");
+
+    if (deviceIdStr.length() == 0 || command.length() == 0) {
+        _server.send(400, "application/json", "{\"success\":false,\"error\":\"device_id and command required\"}");
+        return;
+    }
+
+    // Find device by hex ID
+    uint8_t targetId = (uint8_t)strtol(deviceIdStr.c_str(), NULL, 16);
+    int deviceIndex = -1;
+    for (uint8_t i = 0; i < _manager.getDeviceCount(); i++) {
+        if (_manager.getDevice(i).getDeviceId() == targetId) {
+            deviceIndex = i;
+            break;
+        }
+    }
+
+    if (deviceIndex < 0) {
+        // Device not in OutletManager — auto-register it
+        _manager.selectDevice(targetId);
+        for (uint8_t i = 0; i < _manager.getDeviceCount(); i++) {
+            if (_manager.getDevice(i).getDeviceId() == targetId) {
+                deviceIndex = i;
+                break;
+            }
+        }
+    }
+
+    // Map socket string to protocol constant
+    uint8_t sock = SOCKET_A;
+    if (socketStr == "b" || socketStr == "B" || socketStr == "2") {
+        sock = SOCKET_B;
+    }
+
+    // Select device and send command
+    _manager.selectDevice(targetId);
+
+    if (command == "relay_on") {
+        _manager.relayOn(sock);
+    } else if (command == "relay_off") {
+        _manager.relayOff(sock);
+    } else {
+        _server.send(400, "application/json", "{\"success\":false,\"error\":\"Unknown command\"}");
+        return;
+    }
+
+    // Pump RF receiver for ~300ms to catch PIC ACK
+    unsigned long start = millis();
+    while (millis() - start < 300) {
+        _manager.update();
+    }
+
+    Serial.print("[EXT] ");
+    Serial.print(command);
+    Serial.print(" → 0x");
+    if (targetId < 0x10) Serial.print("0");
+    Serial.print(targetId, HEX);
+    Serial.print(" socket ");
+    Serial.println(sock == SOCKET_A ? "A" : "B");
+
+    _server.send(200, "application/json",
+        "{\"success\":true,\"device_id\":\"" + deviceIdStr + "\"}");
+}
+
+void Dashboard::_handleExtThreshold() {
+    String deviceIdStr = _server.arg("device_id");
+    String valueStr    = _server.arg("value");
+
+    if (deviceIdStr.length() == 0 || valueStr.length() == 0) {
+        _server.send(400, "application/json", "{\"success\":false,\"error\":\"device_id and value required\"}");
+        return;
+    }
+
+    uint8_t targetId = (uint8_t)strtol(deviceIdStr.c_str(), NULL, 16);
+    unsigned int mA = (unsigned int)valueStr.toInt();
+
+    _manager.selectDevice(targetId);
+    _manager.setThreshold(mA);
+
+    // Pump RF for ACK
+    unsigned long start = millis();
+    while (millis() - start < 300) {
+        _manager.update();
+    }
+
+    Serial.print("[EXT] set_threshold ");
+    Serial.print(mA);
+    Serial.print("mA → 0x");
+    if (targetId < 0x10) Serial.print("0");
+    Serial.println(targetId, HEX);
+
+    _server.send(200, "application/json", "{\"success\":true}");
+}
+
+void Dashboard::_handleExtPing() {
+    String json = "{\"alive\":true,\"uptime_ms\":" + String(millis()) + "}";
+    _server.send(200, "application/json", json);
 }
 
 // ════════════════════════════════════════════════════════════
