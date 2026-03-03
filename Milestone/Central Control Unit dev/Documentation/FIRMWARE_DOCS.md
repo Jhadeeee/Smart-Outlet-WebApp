@@ -1,7 +1,7 @@
 # Central Control Unit (CCU) Firmware — Developer Documentation
 
 **MCU:** ESP32 · **Framework:** Arduino · **IDE:** Arduino IDE / PlatformIO  
-**Firmware:** v4.2.0 · **Communication:** HC-12 433MHz RF + WiFi
+**Firmware:** v4.3.0 · **Communication:** HC-12 433MHz RF + WiFi
 
 ---
 
@@ -125,7 +125,7 @@ The loop runs the active mode's subsystems:
 ### LOCAL_DASHBOARD Mode
 - `dashboard.handleClient()` — serves web dashboard
 - `outletManager.update()` — reads/parses HC-12 packets
-- `breakerMonitor.update()` — non-blocking SCT013 current sampling
+- `breakerMonitor.readFresh()` — periodic blocking 166ms ADC burst (every 1.5s, immune to WiFi noise)
 - `serialCLI.update()` — reads serial CLI input
 
 ### RUNNING Mode
@@ -133,7 +133,7 @@ The loop runs the active mode's subsystems:
 - WiFi reconnection — if disconnected, retries connection or falls back to SETUP
 - Cloud data push — sends JSON payload to server every 2 seconds
 - Cloud failure tracking — logs first failure, then reminders every ~60s
-- Feeds breaker reading cache to OutletManager for serial output
+- Breaker reads use blocking `readFresh()` every 1.5s (same as LOCAL_DASHBOARD)
 - **Focus Device** — polls `/api/focus/` each cycle, only reads sensors for the focused device. If no device is focused, sensor reads are skipped entirely (breaker always sends).
 
 ---
@@ -437,7 +437,7 @@ When in RUNNING mode, the CCU periodically sends data to the configured server:
 | Define                  | Value    | Notes                    |
 |:------------------------|:---------|:-------------------------|
 | `SERIAL_BAUD`           | `115200` | USB serial monitor       |
-| `CLOUD_SEND_INTERVAL_MS`| `10000` | 10s between cloud pushes |
+| `CLOUD_SEND_INTERVAL_MS`| `2000`  | 2s between cloud pushes  |
 | `HTTP_TIMEOUT_MS`       | `5000`  | HTTP request timeout     |
 
 ---
@@ -502,8 +502,8 @@ When in RUNNING mode, the CCU periodically sends data to the configured server:
 | `uint8_t getSenderID() const` | Get the CCU's sender ID (master ID). |
 | `void setSenderID(uint8_t id)` | Set the CCU's sender ID. |
 | `uint8_t getLastAckSender() const` | Get sender of the most recent ACK (for ID change detection). |
-| `void setLastBreakerMA(uint16_t mA)` | Cache the latest breaker reading for `[PIC X]` serial output. |
-| `uint16_t getLastBreakerMA() const` | Get cached breaker reading. |
+| `void setBreakerMonitor(BreakerMonitor*)` | Set pointer to BreakerMonitor for live breaker readings in serial output. |
+| `int getLiveBreakerMA() const` | Get live breaker reading via BreakerMonitor pointer (same source as dashboard). |
 | `void sendATCommand(const String&)` | Passthrough AT commands to HC-12 module. |
 | `void sendRawHex(const String&)` | Send raw hex bytes directly via HC-12. |
 | `HardwareSerial& getHC12()` | Get HC-12 serial reference for advanced use. |
@@ -527,7 +527,8 @@ When in RUNNING mode, the CCU periodically sends data to the configured server:
 |:-------|:------------|
 | `BreakerMonitor()` | Constructor — creates SCT013 sensor on `BREAKER_ADC_PIN`. |
 | `void begin()` | Initialize SCT013 with CT ratio and burden resistor from Config.h. |
-| `bool update()` | Non-blocking sample. Returns `true` when a new RMS reading is ready. **Call in loop().** |
+| `bool update()` | Non-blocking sample. Returns `true` when a new RMS reading is ready. |
+| `void readFresh()` | Blocking 166ms continuous ADC burst. Immune to WiFi noise. Call periodically (~1.5s). |
 | `double getAmps() const` | Get last RMS current in Amps. |
 | `int getMilliAmps() const` | Get last RMS current in milliAmps. |
 | `bool hasReading() const` | True if at least one reading has completed. |

@@ -1,6 +1,6 @@
 # 🔌 Smart Outlet System — Project Milestones
 
-**Last Updated:** March 3, 2026 (Focus Device)
+**Last Updated:** March 4, 2026 (Breaker ADC Fix)
 
 ---
 
@@ -15,9 +15,9 @@
 | Component                | Version | Status         | Documentation                                                                 |
 |:-------------------------|:--------|:---------------|:------------------------------------------------------------------------------|
 | SmartOutlet Firmware     | v5.3.1  | ✅ Stable      | [FIRMWARE_DOCS.md](Smart%20Outlet%20Device%20dev/Documentation/FIRMWARE_DOCS.md) |
-| CCU Firmware (ESP32)     | v4.2.0  | ✅ Stable      | [FIRMWARE_DOCS.md](Central%20Control%20Unit%20dev/Documentation/FIRMWARE_DOCS.md) |
+| CCU Firmware (ESP32)     | v4.3.0  | ✅ Stable      | [FIRMWARE_DOCS.md](Central%20Control%20Unit%20dev/Documentation/FIRMWARE_DOCS.md) |
 | Smart-Outlet-WebApp      | v1.3.0  | ✅ Stable      | [WEBAPP_DOCS.md](Smart-Outlet-WebApp%20dev/Documentation/WEBAPP_DOCS.md)            |
-| Outlet Breaker (SCT013)  | v4.2.0  | ✅ Stable      | [FIRMWARE_DOCS.md](Central%20Control%20Unit%20dev/Documentation/FIRMWARE_DOCS.md) |
+| Outlet Breaker (SCT013)  | v4.3.0  | ✅ Stable      | [FIRMWARE_DOCS.md](Central%20Control%20Unit%20dev/Documentation/FIRMWARE_DOCS.md) |
 
 ---
 
@@ -27,6 +27,7 @@
 
 | Date       | Version | Milestone                                                                 |
 |:-----------|:--------|:--------------------------------------------------------------------------|
+| 2026-03-04 | v4.3.0  | Breaker ADC fix — blocking readFresh() immune to WiFi noise, direct BreakerMonitor pointer |
 | 2026-03-03 | v4.2.0  | Focus Device — cloud loop only reads expanded device, auto-tare breaker   |
 | 2026-03-03 | v4.1.0  | Direct API routes for Django, event-driven serial output, breaker cache   |
 | 2026-02-24 | v4.0.0  | Main breaker monitoring — SCT013 integration, dashboard UI, cut-all/per-device |
