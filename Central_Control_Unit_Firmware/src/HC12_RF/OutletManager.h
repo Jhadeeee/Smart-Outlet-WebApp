@@ -70,6 +70,10 @@ public:
     // Last ACK sender (for Device ID change detection)
     uint8_t getLastAckSender() const;
 
+    // Breaker reading cache (set from main loop so _parsePacket can print it)
+    void setLastBreakerMA(uint16_t mA);
+    uint16_t getLastBreakerMA() const;
+
     // ─── HC-12 Utilities ────────────────────
     // Send an AT command to the HC-12 module
     void sendATCommand(const String& cmd);
@@ -95,6 +99,9 @@ private:
 
     // ACK tracking
     uint8_t       _lastAckSender;   // Sender of most recent ACK
+
+    // Breaker cache for serial output
+    uint16_t      _lastBreakerMA;
 
     // ─── Internal Methods ───────────────────
     // Find device index by ID, returns -1 if not found
