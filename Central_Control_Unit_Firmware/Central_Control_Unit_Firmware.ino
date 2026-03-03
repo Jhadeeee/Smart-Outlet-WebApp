@@ -286,8 +286,11 @@ void loop() {
             // HC-12 RF: read incoming packets from smart outlets
             outletManager.update();
 
-            // Breaker Monitor: read SCT013 sensor
-            breakerMonitor.update();
+            // Breaker Monitor: periodic blocking read (same as LOCAL_DASHBOARD)
+            if (millis() - lastBreakerRead >= BREAKER_READ_INTERVAL) {
+                breakerMonitor.readFresh();
+                lastBreakerRead = millis();
+            }
 
             // Serial CLI: handle debug commands from serial monitor
             serialCLI.update();
