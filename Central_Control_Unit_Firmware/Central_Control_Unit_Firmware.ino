@@ -269,9 +269,8 @@ void loop() {
         // ─── Local Dashboard: AP + HC-12 (no cloud) ─────
         case DeviceMode::LOCAL_DASHBOARD:
             dashboard.handleClient();
-            // Breaker: just update — serial reads live via setBreakerMonitor
-            breakerMonitor.update();
-            outletManager.update();
+            outletManager.update();      // Serial reads _lastAmps (same value dashboard saw)
+            breakerMonitor.update();     // Update AFTER serial print — new reading for next cycle
             serialCLI.update();
             break;
 
