@@ -1,7 +1,76 @@
 # Smart-Outlet-WebApp — Developer Documentation
 
 **Framework:** Django 5.2 · **ASGI Server:** Daphne · **Database:** PostgreSQL  
-**Real-Time:** Django Channels (WebSockets) · **Version:** v1.0.0 (first_stable_UI)
+**Real-Time:** Django Channels (WebSockets) · **Version:** v1.3.0
+
+---
+
+## Quick Start Guide
+
+### 1. Start the Local Server
+
+All commands run from the project root: `C:\Users\USER\Desktop\CONCEPT PAPER\Smart-Outlet-WebApp`
+
+```powershell
+# Start Daphne (ASGI — supports WebSockets for real-time updates)
+.\venv\Scripts\python.exe -m daphne -b 0.0.0.0 -p 8000 config.asgi:application
+```
+
+Then open **http://localhost:8000** in your browser.
+
+### 2. Find Your PC's IP Address
+
+The ESP32 needs your PC's LAN IP to connect to the server.
+
+```powershell
+# Get your WiFi/Ethernet IP
+(Get-NetIPAddress -AddressFamily IPv4 | Where-Object {$_.InterfaceAlias -like "*Wi-Fi*" -or $_.InterfaceAlias -like "*Ethernet*"}).IPAddress
+```
+
+Look for the one starting with `192.168.x.x` — that's your LAN IP.
+
+### 3. Setup ESP32 WiFi
+
+1. Power on the ESP32 — it starts in **AP mode** (`CCU-Setup` WiFi network)
+2. Connect your phone/laptop to the `CCU-Setup` WiFi
+3. A captive portal opens (or go to `http://192.168.4.1`)
+4. Click **WiFi Settings** or go to `http://192.168.4.1/settings`
+5. Enter:
+   - **SSID:** Your home WiFi name
+   - **Password:** Your WiFi password
+   - **Server URL:** `http://<Your-PC-IP>:8000` (e.g. `http://192.168.1.192:8000`)
+6. Click **Save** — ESP32 restarts and connects to your WiFi + server
+
+### 4. Kill the Local Server
+
+```powershell
+# If you still have the terminal open:
+# Press Ctrl+C
+
+# If you accidentally closed the terminal:
+taskkill /F /PID (Get-NetTCPConnection -LocalPort 8000 -ErrorAction SilentlyContinue).OwningProcess
+```
+
+### 5. Run Database Migrations
+
+```powershell
+# Generate new migration files
+.\venv\Scripts\python.exe manage.py makemigrations outlets
+
+# Apply migrations to Supabase
+.\venv\Scripts\python.exe manage.py migrate
+```
+
+### 6. Common Commands
+
+| Command | Description |
+|:--------|:------------|
+| `.\venv\Scripts\python.exe -m daphne -b 0.0.0.0 -p 8000 config.asgi:application` | Start server (with WebSocket support) |
+| `.\venv\Scripts\python.exe manage.py runserver 0.0.0.0:8000` | Start server (basic, no WebSocket) |
+| `.\venv\Scripts\python.exe manage.py makemigrations outlets` | Generate migration files |
+| `.\venv\Scripts\python.exe manage.py migrate` | Apply migrations to database |
+| `.\venv\Scripts\python.exe manage.py createsuperuser` | Create admin user |
+| `taskkill /F /PID (Get-NetTCPConnection -LocalPort 8000 -ErrorAction SilentlyContinue).OwningProcess` | Kill server on port 8000 |
 
 ---
 
@@ -22,6 +91,8 @@
 │    - PendingCommand   - /api/commands/                       │
 │    - Alert            - /api/devices/                        │
 │    - MainBreakerReading                                      │
+│    - CentralControlUnit                                      │
+│    - EventLog                                                │
 │                                                              │
 │  ┌────────────────────────────────────────────────────────┐  │
 │  │   Frontend  (templates/home.html)                      │  │
@@ -56,6 +127,7 @@
 | `relay_a`    | BooleanField| `False`  | Socket A relay state               |
 | `relay_b`    | BooleanField| `False`  | Socket B relay state               |
 | `threshold`  | IntegerField| `0`      | Current threshold in mA            |
+| `ccu`        | ForeignKey  | null     | Linked `CentralControlUnit` (auto-set) |
 | `created_at` | DateTime    | auto     | Creation timestamp                 |
 | `updated_at` | DateTime    | auto     | Last update timestamp              |
 
@@ -109,7 +181,25 @@
 | `ccu_id`     | CharField    | —          | Unique CCU ID, e.g. `"01"`     |
 | `name`       | CharField    | `"My CCU"` | User-assigned label             |
 | `location`   | CharField    | `""`       | Optional location               |
+| `ip_address` | GenericIP    | null       | ESP32's LAN IP (auto-captured)  |
+| `last_seen`  | DateTime     | null       | Last data push timestamp        |
+| `focused_device` | CharField | `""`       | Currently expanded outlet (hex) |
 | `created_at` | DateTime     | auto       | Registration timestamp          |
+
+> **IP Capture:** The ESP32's IP is automatically captured from every `/api/data/` and `/api/breaker-data/` POST. This enables direct communication.
+
+### EventLog
+
+Audit log for tracking user actions and system events.
+
+| Field        | Type         | Default  | Notes                              |
+|:-------------|:-------------|:---------|:-----------------------------------|
+| `user`       | ForeignKey   | null     | User who triggered the action      |
+| `source`     | CharField    | —        | `WEB_DASHBOARD`, `PIC_HARDWARE`, `SERVER` |
+| `action_type`| CharField    | —        | `TOGGLE_RELAY`, `OVERLOAD_TRIPPED`, `SET_THRESHOLD`, `THRESHOLD_EXCEEDED` |
+| `target_device` | CharField | `""`     | e.g. `0xFE`, `All Devices`         |
+| `details`    | TextField    | `""`     | Human-readable description         |
+| `created_at` | DateTime     | auto     | Event timestamp                    |
 
 ---
 
@@ -128,6 +218,14 @@
 |:-------|:------------------------------|:------------------------|:------------------------------------|
 | GET    | `/api/commands/<device_id>/`  | `get_pending_commands`  | `{success, commands: [{command, socket, value}]}` |
 | GET    | `/api/devices/`               | `get_registered_outlets`| `{success, devices: ["FE", "FD"]}` |
+
+### Focus Device (Expand/Collapse)
+
+| Method | Route                         | Function                | Notes                               |
+|:-------|:------------------------------|:------------------------|:------------------------------------|
+| GET    | `/api/focus/`                 | `get_focus_device`      | Returns `{success, device_id}` — ESP32 polls this |
+| POST   | `/api/focus/<device_id>/`     | `set_focus_device`      | Sets focused device (expand)        |
+| POST   | `/api/focus/clear/`           | `clear_focus_device`    | Clears focus (collapse)             |
 
 ### UI → Django (User Actions)
 
@@ -165,17 +263,29 @@
 6. Browser receives WebSocket message → updates UI in real-time
 ```
 
-### Commands (UI → Physical Relay)
+### Commands — Direct Communication (UI → ESP32 → PIC)
 
 ```
 1. User clicks toggle switch on web UI
 2. JavaScript fetch() POSTs to /api/commands/FE/relay_on/
-3. Django creates PendingCommand record in DB
-4. Django speculatively updates Outlet.relay_a in DB for instant UI feedback
-5. ESP32 polls GET /api/commands/FE/ (every 2s)
-6. Django returns pending commands, marks them as executed
-7. ESP32 parses command, sends HC-12 RF packet to PIC
-8. PIC toggles relay, sends CMD_ACK back
+3. Django looks up ESP32 IP from CentralControlUnit.ip_address
+4. Django sends HTTP POST to http://<ESP32_IP>/api/ext/relay
+5. ESP32 sends HC-12 RF packet to PIC
+6. PIC toggles relay, sends CMD_ACK back
+7. ESP32 returns JSON {success: true, ack: true} to Django
+8. Django updates Outlet state in DB + creates EventLog
+9. UI toast: "✅ Relay ON confirmed by ESP32"
+```
+
+### Commands — Fallback (Polling Queue)
+
+```
+If ESP32 is unreachable (offline, wrong IP, timeout):
+1. Django falls back to creating a PendingCommand record
+2. ESP32 polls GET /api/commands/FE/ (every 2s)
+3. Django returns pending commands, marks them as executed
+4. ESP32 parses command, sends HC-12 RF packet to PIC
+5. UI toast: "⚠️ Command queued (ESP32 offline)"
 ```
 
 ### Auto Device Registration (on boot)
@@ -219,8 +329,8 @@ Alerts fire **immediately** (not subject to the 5-minute DB throttle):
 
 | Function                     | Description                                    |
 |:-----------------------------|:-----------------------------------------------|
-| `sendCommand(deviceId, cmd, socket, value)` | Generic command sender via `fetch()` POST |
-| `toggleRelay(deviceId, socket, state)`      | Toggle relay ON/OFF                      |
+| `sendCommand(deviceId, cmd, socket, value)` | Generic command sender via `fetch()` POST. Returns `{success, direct}` |
+| `toggleRelay(deviceId, socket, state)`      | Toggle relay — adds loading state (dim + disable), reverts on failure |
 | `setOutletThreshold(deviceId)`              | Set per-outlet threshold from input      |
 | `setMainThreshold()`                        | Set main breaker threshold               |
 | `cutAllPower()`                             | Emergency: turn OFF all relays on all outlets |
@@ -310,3 +420,8 @@ Example: `http://10.31.253.107:8000`
 | **Auto device sync** | The ESP32 re-fetches `/api/devices/` every 2 seconds. New outlets added on the web UI are detected within 2 seconds — no reboot required. |
 | **WebSocket reconnect** | If the WebSocket connection drops, the frontend auto-reconnects after 5 seconds. |
 | **DB write throttle** | `SensorData` is only saved every 5 minutes. Real-time data is always available via WebSocket. |
+| **Direct fallback** | If ESP32 is unreachable for direct HTTP, Django silently falls back to `PendingCommand` queue (~2s delay). |
+| **Stale IP** | ESP32 IP is updated on every sensor push. If the IP changes, the next push auto-corrects it. |
+| **Current display** | Current values are displayed in milliamperes (mA) without rounding for higher precision. |
+| **Focus Device** | Only the expanded outlet receives sensor reads. Collapsed outlets show `0 mA` with disabled toggles. ESP32 polls `/api/focus/` every 2s. |
+| **Last-write-wins** | If two users expand different outlets, the last expansion wins. All users see the same focused device. |

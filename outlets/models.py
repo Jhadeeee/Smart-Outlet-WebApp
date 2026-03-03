@@ -34,6 +34,9 @@ class CentralControlUnit(models.Model):
     ccu_id = models.CharField(max_length=10, unique=True, help_text="CCU device ID, e.g. '01'")
     name = models.CharField(max_length=100, default='My CCU')
     location = models.CharField(max_length=100, blank=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True, help_text="Last known LAN IP of this ESP32")
+    last_seen = models.DateTimeField(null=True, blank=True, help_text="Last time this CCU contacted the server")
+    focused_device = models.CharField(max_length=10, blank=True, default='', help_text="Currently expanded outlet device_id (hex)")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -48,6 +51,8 @@ class CentralControlUnit(models.Model):
 class Outlet(models.Model):
     """Smart Outlet Device Model — matches CCU firmware OutletDevice"""
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='outlets')
+    ccu = models.ForeignKey(CentralControlUnit, null=True, blank=True, on_delete=models.SET_NULL,
+                            related_name='outlets', help_text="Parent CCU (auto-set when ESP32 sends data)")
     name = models.CharField(max_length=100)
     device_id = models.CharField(max_length=10, unique=True, help_text="Hex device ID, e.g. 'FE'")
     location = models.CharField(max_length=100, blank=True)
@@ -176,42 +181,21 @@ class PendingCommand(models.Model):
 
 class EventLog(models.Model):
     """
-    Logs all significant system events: relay toggles, overload trips,
-    threshold changes, power cuts, etc.
-    
-    Reuses the existing 'outlets_testeventlog' table (renamed via migration).
+    Audit log for tracking user actions and system events.
+    Used for debugging and activity history.
     """
-    SOURCE_CHOICES = [
-        ('WEB_DASHBOARD', 'Web Dashboard'),
-        ('ESP32_AUTO_CUT', 'ESP32 Auto Cutoff'),
-        ('PIC_HARDWARE', 'PIC Hardware'),
-        ('ESP32_SYSTEM', 'ESP32 System Logic'),
-        ('SERVER', 'Server'),
-    ]
-    
-    ACTION_CHOICES = [
-        ('TOGGLE_RELAY', 'Toggle Relay'),
-        ('SET_THRESHOLD', 'Set Threshold'),
-        ('SET_MASTER_ID', 'Set Master ID'),
-        ('ADD_DEVICE', 'Add Device'),
-        ('DELETE_DEVICE', 'Delete Device'),
-        ('OVERLOAD_TRIPPED', 'Overload Tripped'),
-        ('THRESHOLD_EXCEEDED', 'Threshold Exceeded'),
-        ('CUT_ALL_POWER', 'Cut All Power'),
-        ('ACK_RECEIVED', 'Command Acknowledged'),
-        ('SYSTEM_BOOT', 'System Boot'),
-        ('SYSTEM_CLEARED', 'System Cleared'),
-    ]
-    
     user = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='event_logs')
-    timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
-    source = models.CharField(max_length=50, choices=SOURCE_CHOICES)
-    action_type = models.CharField(max_length=50, choices=ACTION_CHOICES)
-    target_device = models.CharField(max_length=50, help_text="e.g. 0xFE, Main Breaker, or All Devices")
-    details = models.TextField(help_text="Plain English explanation of the event")
-    
+    source = models.CharField(max_length=30, help_text="e.g. WEB_DASHBOARD, PIC_HARDWARE, SERVER")
+    action_type = models.CharField(max_length=30, help_text="e.g. TOGGLE_RELAY, OVERLOAD_TRIPPED, SET_THRESHOLD")
+    target_device = models.CharField(max_length=20, blank=True, help_text="e.g. 0xFE, All Devices")
+    details = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
     class Meta:
-        ordering = ['-timestamp']
-    
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['-created_at']),
+        ]
+
     def __str__(self):
-        return f"[{self.action_type}] {self.target_device} — {self.timestamp.strftime('%Y-%m-%d %H:%M:%S')}"
+        return f"[{self.source}] {self.action_type} — {self.target_device} ({self.created_at.strftime('%H:%M:%S')})"

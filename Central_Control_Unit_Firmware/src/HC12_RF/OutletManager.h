@@ -22,6 +22,7 @@
 #include "../../Config.h"
 #include "RFProtocol.h"
 #include "OutletDevice.h"
+#include "../BreakerMonitor/BreakerMonitor.h"
 
 class OutletManager {
 public:
@@ -70,6 +71,10 @@ public:
     // Last ACK sender (for Device ID change detection)
     uint8_t getLastAckSender() const;
 
+    // Breaker monitor reference (reads live value like dashboard does)
+    void setBreakerMonitor(BreakerMonitor* monitor);
+    int  getLiveBreakerMA() const;
+
     // ─── HC-12 Utilities ────────────────────
     // Send an AT command to the HC-12 module
     void sendATCommand(const String& cmd);
@@ -95,6 +100,9 @@ private:
 
     // ACK tracking
     uint8_t       _lastAckSender;   // Sender of most recent ACK
+
+    // Direct pointer to BreakerMonitor (reads live, like dashboard)
+    BreakerMonitor* _breakerMonitor;
 
     // ─── Internal Methods ───────────────────
     // Find device index by ID, returns -1 if not found

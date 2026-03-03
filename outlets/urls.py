@@ -24,7 +24,4 @@ urlpatterns = [
     # CCU management
     path('ccu/add/', views.add_ccu, name='add_ccu'),
     path('ccu/<str:ccu_id>/delete/', views.delete_ccu, name='delete_ccu'),
-    
-    # Event History
-    path('event-history/', views.event_history_view, name='event_history'),
 ]

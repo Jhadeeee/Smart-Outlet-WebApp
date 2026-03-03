@@ -12,7 +12,8 @@ OutletManager::OutletManager()
       _deviceCount(0),
       _activeIndex(0),
       _rxIndex(0),
-      _lastAckSender(0) {
+      _lastAckSender(0),
+      _breakerMonitor(nullptr) {
     // No default device — dashboard starts empty
 }
 
@@ -67,16 +68,13 @@ void OutletManager::sendCommand(uint8_t cmd, uint8_t dataH, uint8_t dataL) {
     for (int i = 0; i < RF_PACKET_SIZE; i++) {
         _hc12.write(buf[i]);
     }
-
-    // Print TX packet to serial monitor
-    RFProtocol::printPacket(pkt, "RAW");
 }
 
 // ─── Convenience Commands ───────────────────────────────────
 void OutletManager::relayOn(uint8_t socket) {
     Serial.print("[TX] Relay ");
     Serial.print(socket == SOCKET_A ? "A" : "B");
-    Serial.print(" ON -> 0x");
+    Serial.print(" ON: 0x");
     Serial.println(_devices[_activeIndex].getDeviceId(), HEX);
     sendCommand(CMD_RELAY_ON, 0x00, socket);
 }
@@ -84,13 +82,13 @@ void OutletManager::relayOn(uint8_t socket) {
 void OutletManager::relayOff(uint8_t socket) {
     Serial.print("[TX] Relay ");
     Serial.print(socket == SOCKET_A ? "A" : "B");
-    Serial.print(" OFF -> 0x");
+    Serial.print(" OFF: 0x");
     Serial.println(_devices[_activeIndex].getDeviceId(), HEX);
     sendCommand(CMD_RELAY_OFF, 0x00, socket);
 }
 
 void OutletManager::readSensors() {
-    Serial.print("[TX] Read Sensors -> 0x");
+    Serial.print("[TX] Read Sensors: 0x");
     Serial.println(_devices[_activeIndex].getDeviceId(), HEX);
     sendCommand(CMD_READ_CURRENT, 0x00, 0x00);
 }
@@ -100,7 +98,7 @@ void OutletManager::setThreshold(unsigned int mA) {
     uint8_t lo = mA & 0xFF;
     Serial.print("[TX] Set Threshold ");
     Serial.print(mA);
-    Serial.print("mA -> 0x");
+    Serial.print("mA: 0x");
     Serial.println(_devices[_activeIndex].getDeviceId(), HEX);
     _devices[_activeIndex].setPendingThreshold(mA);
     sendCommand(CMD_SET_THRESHOLD, hi, lo);
@@ -110,7 +108,7 @@ void OutletManager::setDeviceID(uint8_t newId) {
     Serial.print("[TX] Set Device ID 0x");
     if (newId < 0x10) Serial.print("0");
     Serial.print(newId, HEX);
-    Serial.print(" -> 0x");
+    Serial.print(": 0x");
     Serial.println(_devices[_activeIndex].getDeviceId(), HEX);
     sendCommand(CMD_SET_DEVICE_ID, 0x00, newId);
 }
@@ -119,14 +117,14 @@ void OutletManager::setMasterID(uint8_t newId) {
     Serial.print("[TX] Set Master ID 0x");
     if (newId < 0x10) Serial.print("0");
     Serial.print(newId, HEX);
-    Serial.print(" -> 0x");
+    Serial.print(": 0x");
     Serial.println(_devices[_activeIndex].getDeviceId(), HEX);
     _devices[_activeIndex].setPendingMasterID(newId);
     sendCommand(CMD_SET_ID_MASTER, 0x00, newId);
 }
 
 void OutletManager::ping() {
-    Serial.print("[TX] Ping -> 0x");
+    Serial.print("[TX] Ping: 0x");
     Serial.println(_devices[_activeIndex].getDeviceId(), HEX);
     sendCommand(CMD_PING, 0x00, 0x00);
 }
@@ -142,10 +140,6 @@ void OutletManager::selectDevice(uint8_t deviceId) {
         }
     }
     _activeIndex = idx;
-
-    Serial.print("Target: 0x");
-    if (deviceId < 0x10) Serial.print("0");
-    Serial.println(deviceId, HEX);
 }
 
 OutletDevice& OutletManager::getActiveDevice() {
@@ -202,6 +196,17 @@ uint8_t OutletManager::getLastAckSender() const {
     return _lastAckSender;
 }
 
+void OutletManager::setBreakerMonitor(BreakerMonitor* monitor) {
+    _breakerMonitor = monitor;
+}
+
+int OutletManager::getLiveBreakerMA() const {
+    if (_breakerMonitor && _breakerMonitor->hasReading()) {
+        return _breakerMonitor->getMilliAmps();
+    }
+    return 0;
+}
+
 // ─── AT Command Passthrough ─────────────────────────────────
 void OutletManager::sendATCommand(const String& cmd) {
     Serial.print("[AT] ");
@@ -247,6 +252,12 @@ int OutletManager::_addDevice(uint8_t deviceId) {
     if (_deviceCount >= MAX_OUTLETS) return -1;
 
     _devices[_deviceCount].init(deviceId);
+
+    // Auto-name as "PIC X" if no name is set
+    char autoName[20];
+    snprintf(autoName, sizeof(autoName), "PIC %d", deviceId);
+    _devices[_deviceCount].setName(autoName);
+
     return _deviceCount++;
 }
 
@@ -266,69 +277,87 @@ void OutletManager::_parsePacket(const uint8_t* frame) {
     uint8_t dataL   = pkt.dataL;
     uint16_t val16  = ((uint16_t)dataH << 8) | dataL;
 
-    Serial.println("\n--- RX PACKET ---");
+    // ── Build single-line output ──
+    // RAW bytes
+    uint8_t buf[RF_PACKET_SIZE];
+    RFProtocol::toBuffer(pkt, buf);
+    Serial.print("[RX PACKET] RAW: ");
+    for (int i = 0; i < RF_PACKET_SIZE; i++) {
+        if (buf[i] < 0x10) Serial.print("0");
+        Serial.print(buf[i], HEX);
+        Serial.print(" ");
+    }
 
-    // Print raw hex (Feature #30)
-    RFProtocol::printPacket(pkt, "RAW");
-
-    // Print sender (Feature #31)
-    Serial.print("FROM: PIC 0x");
+    // FROM
+    Serial.print("| FROM: 0x");
     if (sender < 0x10) Serial.print("0");
-    Serial.println(sender, HEX);
+    Serial.print(sender, HEX);
 
     // Find or create the sender device for state tracking
     int senderIdx = _findDevice(sender);
 
-    Serial.print("TYPE: ");
+    // TYPE + details
+    Serial.print(" | TYPE: ");
 
     if (cmd == CMD_ACK) {
-        Serial.println("ACK");
-        _lastAckSender = sender;  // Track for Device ID change detection
+        Serial.print("ACK");
+        _lastAckSender = sender;
 
-        // Update state on the sender device (Feature #5, #6, #7, #10-12)
         if (senderIdx >= 0) {
             _devices[senderIdx].processACK(dataH, dataL);
-        } else {
-            // ACK from an unknown device — still display it
-            Serial.print("  Socket: ");
-            if (dataH == SOCKET_A)       Serial.println("A");
-            else if (dataH == SOCKET_B)  Serial.println("B");
-            else if (dataH == 0x00)      Serial.println("System");
-            else { Serial.print("0x"); Serial.println(dataH, HEX); }
-
-            Serial.print("  Action: CMD 0x");
-            Serial.println(dataL, HEX);
         }
+        // Show what was ACK'd
+        if (dataH == SOCKET_A)      Serial.print(" (Socket A)");
+        else if (dataH == SOCKET_B) Serial.print(" (Socket B)");
+        else if (dataH == 0x00)     Serial.print(" (System)");
     }
     else if (cmd == CMD_REPORT_DATA) {
-        Serial.println("DATA REPORT");
+        Serial.print("DATA REPORT");
 
-        // Overload trip detection (Feature #9)
         if (val16 == 0xFFFF) {
-            Serial.println("  >>> OVERLOAD TRIP! <<<");
+            Serial.print(" (OVERLOAD!)");
         } else {
-            // Current reading (Feature #8)
-            Serial.print("  Current: ");
+            Serial.print(" (");
             Serial.print(val16);
-            Serial.print(" mA (");
-            Serial.print(val16 / 1000.0, 2);
-            Serial.println(" A)");
-        }
+            Serial.print("mA)");
 
-        // Store current on active device, using sender as socket ID
-        // PIC sets sender_id = 0x01 (Socket A) or 0x02 (Socket B)
-        if (_deviceCount > 0) {
-            if (sender == SOCKET_A)
-                _devices[_activeIndex].setCurrentA(val16);
-            else if (sender == SOCKET_B)
-                _devices[_activeIndex].setCurrentB(val16);
+            // Store current on active device
+            if (_deviceCount > 0) {
+                if (sender == SOCKET_A)
+                    _devices[_activeIndex].setCurrentA(val16);
+                else if (sender == SOCKET_B)
+                    _devices[_activeIndex].setCurrentB(val16);
+            }
         }
     }
     else {
-        // Unknown command type
         Serial.print("CMD 0x");
-        Serial.println(cmd, HEX);
+        Serial.print(cmd, HEX);
     }
 
-    Serial.println("-----------------");
+    Serial.println();  // End the [RX PACKET] line
+
+    // ── Print [PIC name] device status line ──
+    if (_deviceCount > 0 && (cmd == CMD_REPORT_DATA || cmd == CMD_ACK)) {
+        OutletDevice& dev = _devices[_activeIndex];
+        uint16_t curA = dev.getCurrentA();
+        uint16_t curB = dev.getCurrentB();
+
+        Serial.print("[");
+        Serial.print(dev.getName());
+        Serial.print("] Breaker: ");
+        Serial.print(getLiveBreakerMA());
+        Serial.print("mA | 0x");
+        if (dev.getDeviceId() < 0x10) Serial.print("0");
+        Serial.print(dev.getDeviceId(), HEX);
+        Serial.print(": A=");
+        if (curA == 65535) Serial.print("OVERLOAD"); else { Serial.print(curA); Serial.print("mA"); }
+        Serial.print(" B=");
+        if (curB == 65535) Serial.print("OVERLOAD"); else { Serial.print(curB); Serial.print("mA"); }
+        Serial.print(" | RA: ");
+        Serial.print(dev.getRelayA() ? "ON" : "OFF");
+        Serial.print(" RB: ");
+        Serial.println(dev.getRelayB() ? "ON" : "OFF");
+        Serial.println();  // Blank line between groups
+    }
 }

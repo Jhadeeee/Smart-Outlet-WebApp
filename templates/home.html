@@ -1124,6 +1124,57 @@
                 font-size: 13px;
             }
         }
+
+        /* ─── Outlet Card Focus States ─── */
+        .outlet-card-header {
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .outlet-card-header:hover {
+            opacity: 0.85;
+        }
+
+        .outlet-card.collapsed .outlet-card-body {
+            max-height: 0;
+            opacity: 0;
+            overflow: hidden;
+            padding: 0;
+            margin: 0;
+            pointer-events: none;
+            transition: max-height 0.3s ease, opacity 0.2s ease;
+        }
+
+        .outlet-card.expanded .outlet-card-body {
+            max-height: 500px;
+            opacity: 1;
+            transition: max-height 0.4s ease, opacity 0.3s ease;
+        }
+
+        .outlet-card.collapsed {
+            opacity: 0.55;
+        }
+
+        .outlet-card.collapsed:hover {
+            opacity: 0.75;
+        }
+
+        .outlet-card.expanded {
+            opacity: 1;
+            border-color: rgba(102, 126, 234, 0.4);
+            box-shadow: 0 0 20px rgba(102, 126, 234, 0.1);
+        }
+
+        .expand-indicator {
+            color: rgba(255, 255, 255, 0.3);
+            font-size: 12px;
+            transition: transform 0.3s ease;
+        }
+
+        .outlet-card.expanded .expand-indicator {
+            transform: rotate(180deg);
+            color: var(--primary-purple);
+        }
     </style>
 </head>
 
@@ -1158,10 +1209,6 @@
                                 <i class="fas fa-cog"></i>
                                 <span>Admin Panel</span>
                             </a>
-                            <a href="{% url 'outlets:event_history' %}" class="profile-menu-item">
-                                <i class="fas fa-history"></i>
-                                <span>Event History</span>
-                            </a>
                             <a href="{% url 'outlets:logout' %}" class="profile-menu-item logout">
                                 <i class="fas fa-sign-out-alt"></i>
                                 <span>Logout</span>
@@ -1184,7 +1231,7 @@
                     <div class="total-load-card">
                         <div class="total-load-label">Total Load Current</div>
                         <div class="total-load-value" id="totalCurrent">
-                            {{ total_current_amps }}<span class="total-load-unit">A</span>
+                            {{ total_current_ma }}<span class="total-load-unit">mA</span>
                         </div>
                     </div>
 
@@ -1285,10 +1332,10 @@
                         {% if outlet_data %}
                         {% for item in outlet_data %}
                         {% with delay=forloop.counter0 %}
-                        <div class="outlet-card" id="outlet-{{ item.outlet.device_id }}"
+                        <div class="outlet-card collapsed" id="outlet-{{ item.outlet.device_id }}"
                             style="animation-delay: 0.{{ delay }}s">
 
-                            <div class="outlet-card-header">
+                            <div class="outlet-card-header" onclick="focusDevice('{{ item.outlet.device_id }}')">
                                 <div class="outlet-info">
                                     <div class="outlet-icon {% if item.is_overload %}overload{% endif %}">
                                         <i class="fas fa-plug"></i>
@@ -1296,14 +1343,8 @@
                                     <div>
                                         <div class="outlet-name">{{ item.outlet.name }}</div>
                                         <div class="outlet-subtitle">
-                                            {{ item.total_amps }} A ·
-                                            {% if item.is_overload %}
-                                            <span style="color: var(--danger-red)">OVERLOAD</span>
-                                            {% elif item.outlet.relay_a or item.outlet.relay_b %}
-                                            Active
-                                            {% else %}
+                                            0 mA ·
                                             Inactive
-                                            {% endif %}
                                         </div>
                                         <div class="outlet-device-id">
                                             ID: 0x{{ item.outlet.device_id }}
@@ -1316,64 +1357,68 @@
                                         </div>
                                     </div>
                                 </div>
-                                <div style="display:flex; gap:8px">
+                                <div style="display:flex; gap:8px; align-items:center">
+                                    <i class="fas fa-chevron-down expand-indicator"></i>
                                     <button class="btn-delete-outlet" style="color:rgba(255,255,255,0.5)"
                                         title="Change Device ID"
-                                        onclick="promptChangeDeviceId('{{ item.outlet.device_id }}')">
+                                        onclick="event.stopPropagation(); promptChangeDeviceId('{{ item.outlet.device_id }}')">
                                         <i class="fas fa-pencil-alt"></i>
                                     </button>
                                     <form method="post" action="{% url 'outlets:delete_outlet' item.outlet.device_id %}"
                                         onsubmit="return confirm('Remove {{ item.outlet.name }}?')" style="margin:0">
                                         {% csrf_token %}
-                                        <button type="submit" class="btn-delete-outlet" title="Remove outlet">
+                                        <button type="submit" class="btn-delete-outlet" title="Remove outlet"
+                                            onclick="event.stopPropagation()">
                                             <i class="fas fa-trash-alt"></i>
                                         </button>
                                     </form>
                                 </div>
                             </div>
 
-                            <!-- Device Threshold -->
-                            <div class="limit-bar outlet-limit">
-                                <div class="input-group-custom">
-                                    <label>Threshold:</label>
-                                    <input type="text" id="threshold-{{ item.outlet.device_id }}"
-                                        value="{{ item.outlet.threshold }}">
-                                    <span class="unit">mA</span>
-                                </div>
-                                <button class="btn-save"
-                                    onclick="setOutletThreshold('{{ item.outlet.device_id }}')">Set</button>
-                            </div>
-
-                            <!-- Per-Socket Controls -->
-                            <div class="socket-row">
-                                <!-- Socket A -->
-                                <div class="socket-card">
-                                    <div class="socket-info">
-                                        <span class="socket-label">Socket A</span>
-                                        <span class="socket-current" id="cur-a-{{ item.outlet.device_id }}">
-                                            {{ item.current_a_amps }}<span class="unit">A</span>
-                                        </span>
+                            <div class="outlet-card-body">
+                                <!-- Device Threshold -->
+                                <div class="limit-bar outlet-limit">
+                                    <div class="input-group-custom">
+                                        <label>Threshold:</label>
+                                        <input type="text" id="threshold-{{ item.outlet.device_id }}"
+                                            value="{{ item.outlet.threshold }}">
+                                        <span class="unit">mA</span>
                                     </div>
-                                    <label class="toggle-switch">
-                                        <input type="checkbox" {% if item.outlet.relay_a %}checked{% endif %}
-                                            onchange="toggleRelay('{{ item.outlet.device_id }}', 'a', this.checked)">
-                                        <span class="toggle-slider"></span>
-                                    </label>
+                                    <button class="btn-save"
+                                        onclick="setOutletThreshold('{{ item.outlet.device_id }}')">Set</button>
                                 </div>
 
-                                <!-- Socket B -->
-                                <div class="socket-card">
-                                    <div class="socket-info">
-                                        <span class="socket-label">Socket B</span>
-                                        <span class="socket-current" id="cur-b-{{ item.outlet.device_id }}">
-                                            {{ item.current_b_amps }}<span class="unit">A</span>
-                                        </span>
+                                <!-- Per-Socket Controls -->
+                                <div class="socket-row">
+                                    <!-- Socket A -->
+                                    <div class="socket-card">
+                                        <div class="socket-info">
+                                            <span class="socket-label">Socket A</span>
+                                            <span class="socket-current" id="cur-a-{{ item.outlet.device_id }}">
+                                                0<span class="unit">mA</span>
+                                            </span>
+                                        </div>
+                                        <label class="toggle-switch">
+                                            <input type="checkbox" disabled
+                                                onchange="toggleRelay('{{ item.outlet.device_id }}', 'a', this.checked)">
+                                            <span class="toggle-slider"></span>
+                                        </label>
                                     </div>
-                                    <label class="toggle-switch">
-                                        <input type="checkbox" {% if item.outlet.relay_b %}checked{% endif %}
-                                            onchange="toggleRelay('{{ item.outlet.device_id }}', 'b', this.checked)">
-                                        <span class="toggle-slider"></span>
-                                    </label>
+
+                                    <!-- Socket B -->
+                                    <div class="socket-card">
+                                        <div class="socket-info">
+                                            <span class="socket-label">Socket B</span>
+                                            <span class="socket-current" id="cur-b-{{ item.outlet.device_id }}">
+                                                0<span class="unit">mA</span>
+                                            </span>
+                                        </div>
+                                        <label class="toggle-switch">
+                                            <input type="checkbox" disabled
+                                                onchange="toggleRelay('{{ item.outlet.device_id }}', 'b', this.checked)">
+                                            <span class="toggle-slider"></span>
+                                        </label>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -1526,20 +1571,123 @@
 
                 const data = await response.json();
                 if (data.success) {
-                    showToast(data.message || 'Command sent successfully', 'success');
+                    const type = data.direct ? 'success' : 'success';
+                    showToast(data.message || 'Command sent successfully', type);
                 } else {
                     showToast(data.message || 'Failed to send command', 'error');
                 }
+                return data;
             } catch (error) {
                 showToast('Network error. Please try again.', 'error');
+                return { success: false };
+            }
+        }
+
+        // ─── Focus Device (Expand/Collapse) ───
+        let currentFocusedDevice = null;
+
+        async function focusDevice(deviceId) {
+            const card = document.getElementById(`outlet-${deviceId}`);
+            if (!card) return;
+
+            // If clicking the already-expanded device → collapse it
+            if (currentFocusedDevice === deviceId) {
+                card.classList.remove('expanded');
+                card.classList.add('collapsed');
+                disableToggles(card);
+                resetCurrentDisplay(deviceId);
+                currentFocusedDevice = null;
+
+                // Clear focus on server
+                fetch('/api/focus/clear/', {
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': getCookie('csrftoken') },
+                });
+                return;
+            }
+
+            // Collapse the previously expanded device
+            if (currentFocusedDevice) {
+                const prevCard = document.getElementById(`outlet-${currentFocusedDevice}`);
+                if (prevCard) {
+                    prevCard.classList.remove('expanded');
+                    prevCard.classList.add('collapsed');
+                    disableToggles(prevCard);
+                    resetCurrentDisplay(currentFocusedDevice);
+                }
+            }
+
+            // Expand the clicked device
+            card.classList.remove('collapsed');
+            card.classList.add('expanded');
+            enableToggles(card);
+            currentFocusedDevice = deviceId;
+
+            // Set focus on server
+            fetch(`/api/focus/${deviceId}/`, {
+                method: 'POST',
+                headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            });
+        }
+
+        function disableToggles(card) {
+            card.querySelectorAll('.toggle-switch input[type="checkbox"]').forEach(toggle => {
+                toggle.disabled = true;
+                toggle.checked = false;
+            });
+        }
+
+        function enableToggles(card) {
+            card.querySelectorAll('.toggle-switch input[type="checkbox"]').forEach(toggle => {
+                toggle.disabled = false;
+            });
+        }
+
+        function resetCurrentDisplay(deviceId) {
+            const curA = document.getElementById(`cur-a-${deviceId}`);
+            const curB = document.getElementById(`cur-b-${deviceId}`);
+            if (curA) curA.innerHTML = `0<span class="unit">mA</span>`;
+            if (curB) curB.innerHTML = `0<span class="unit">mA</span>`;
+
+            const card = document.getElementById(`outlet-${deviceId}`);
+            if (card) {
+                const subtitle = card.querySelector('.outlet-subtitle');
+                if (subtitle) subtitle.innerHTML = '0 mA · Inactive';
             }
         }
 
         // ─── Toggle Relay ───
         async function toggleRelay(deviceId, socket, state) {
-            // Using the new generic command structure via the API
+            // Block if device is not focused
+            if (currentFocusedDevice !== deviceId) {
+                showToast('Expand this device first to control it', 'error');
+                return;
+            }
+
             const command = state ? 'relay_on' : 'relay_off';
-            await sendCommand(deviceId, command, socket);
+
+            // Find the toggle switch and add loading state
+            const cardEl = document.getElementById(`outlet-${deviceId}`);
+            const selector = `input[onchange*="'${socket}'"]`;
+            const toggle = cardEl ? cardEl.querySelector(selector) : null;
+            const toggleParent = toggle ? toggle.closest('.toggle-switch') : null;
+
+            if (toggleParent) {
+                toggleParent.style.opacity = '0.5';
+                toggleParent.style.pointerEvents = 'none';
+            }
+
+            const result = await sendCommand(deviceId, command, socket);
+
+            if (toggleParent) {
+                toggleParent.style.opacity = '1';
+                toggleParent.style.pointerEvents = '';
+            }
+
+            // Revert toggle if command failed
+            if (!result.success && toggle) {
+                toggle.checked = !state;
+            }
         }
 
         // ─── Set Cut All Power ───
@@ -1555,19 +1703,6 @@
                 sendCommand(id, 'relay_off', 'a');
                 sendCommand(id, 'relay_off', 'b');
             });
-
-            // Log a single CUT_ALL_POWER event
-            fetch('/api/log-event/', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
-                body: JSON.stringify({
-                    action_type: 'CUT_ALL_POWER',
-                    target_device: 'All Devices',
-                    details: `Emergency power cut — all ${outletIds.length} outlets turned OFF`,
-                    source: 'WEB_DASHBOARD'
-                })
-            });
-
             showToast('Cut power command broadcasted', 'success');
         }
         }
@@ -1647,10 +1782,12 @@
                         // Update Total Load Current
                         const totalEl = document.getElementById('totalCurrent');
                         if (totalEl && payload.current_amps !== undefined) {
-                            totalEl.innerHTML = `${payload.current_amps.toFixed(2)}<span class="total-load-unit">A</span>`;
+                            totalEl.innerHTML = `${payload.current_ma}<span class="total-load-unit">mA</span>`;
                         }
                     } else {
-                        // Update Outlet Data
+                        // Update Outlet Data — only if this device is focused
+                        if (currentFocusedDevice !== payload.device_id) return;
+
                         const curAEl = document.getElementById(`cur-a-${payload.device_id}`);
                         const curBEl = document.getElementById(`cur-b-${payload.device_id}`);
                         // Handle 0xFFFF overload sentinel (65535 = overload, not a real reading)
@@ -1659,10 +1796,10 @@
 
                         if (curAEl) curAEl.innerHTML = isOverloadA
                             ? `<span style="color: var(--danger-red); font-weight: 700;">OVERLOAD</span>`
-                            : `${(payload.current_a / 1000.0).toFixed(2)}<span class="unit">A</span>`;
+                            : `${payload.current_a}<span class="unit">mA</span>`;
                         if (curBEl) curBEl.innerHTML = isOverloadB
                             ? `<span style="color: var(--danger-red); font-weight: 700;">OVERLOAD</span>`
-                            : `${(payload.current_b / 1000.0).toFixed(2)}<span class="unit">A</span>`;
+                            : `${payload.current_b}<span class="unit">mA</span>`;
 
                         // Update Outlet subtitle/total amps (exclude overload sentinel from sum)
                         const cardEl = document.getElementById(`outlet-${payload.device_id}`);
@@ -1672,7 +1809,7 @@
 
                             const realA = isOverloadA ? 0 : payload.current_a;
                             const realB = isOverloadB ? 0 : payload.current_b;
-                            const totalAmps = ((realA + realB) / 1000.0).toFixed(2);
+                            const totalMA = realA + realB;
                             let statusText = 'Inactive';
                             if (payload.is_overload) {
                                 statusText = '<span style="color: var(--danger-red)">OVERLOAD</span>';
@@ -1682,7 +1819,7 @@
                                 iconEl.classList.remove('overload');
                             }
 
-                            if (subtitleEl) subtitleEl.innerHTML = `${totalAmps} A · ${statusText}`;
+                            if (subtitleEl) subtitleEl.innerHTML = `${totalMA} mA · ${statusText}`;
 
                             // Update toggle switch UI
                             const toggleA = cardEl.querySelector('input[onchange*="\'a\'"]');
