@@ -108,3 +108,6 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 LOGIN_URL = 'outlets:login'
 LOGIN_REDIRECT_URL = 'outlets:home'
 LOGOUT_REDIRECT_URL = 'outlets:login'
+
+# Google Sheets Export API Key
+SHEETS_API_KEY = config('SHEETS_API_KEY', default='')

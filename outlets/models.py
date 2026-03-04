@@ -103,6 +103,7 @@ class MainBreakerReading(models.Model):
                             on_delete=models.SET_NULL, related_name='breaker_readings',
                             help_text="Linked CCU device (auto-set from ccu_id)")
     current_ma = models.IntegerField(help_text="Total load current in mA from SCT sensor")
+    threshold = models.IntegerField(default=0, help_text="Current threshold in mA for main breaker")
     timestamp = models.DateTimeField(auto_now_add=True)
 
     class Meta:
