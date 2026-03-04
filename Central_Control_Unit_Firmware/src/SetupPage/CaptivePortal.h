@@ -37,7 +37,11 @@ private:
     void _handleRoot();
     void _handleSubmit();
     void _handleDashboardRequest();
+    void _handleScanWifi();
     void _handleNotFound();
+
+    // ─── Helpers ──────────────────────────────
+    String _scanNetworksJSON();
 
     // ─── HTML Page Builders ───────────────────
     String _buildSetupPage();

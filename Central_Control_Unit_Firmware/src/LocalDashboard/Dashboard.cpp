@@ -6,6 +6,7 @@
  */
 
 #include "Dashboard.h"
+#include <WiFi.h>
 
 Dashboard::Dashboard(OutletManager& manager, ConfigStorage& config, BreakerMonitor& breaker)
     : _server(WEB_SERVER_PORT),
@@ -19,6 +20,7 @@ void Dashboard::begin() {
     _server.on("/dashboard", HTTP_GET,  [this]() { _handleDashboard(); });
     _server.on("/settings",  HTTP_GET,  [this]() { _handleSettings(); });
     _server.on("/settings/save", HTTP_POST, [this]() { _handleSaveSettings(); });
+    _server.on("/scan",          HTTP_GET,  [this]() { _handleScanWifi(); });
 
     // Device CRUD API
     _server.on("/api/devices",          HTTP_GET,  [this]() { _handleApiDeviceList(); });
@@ -79,6 +81,16 @@ void Dashboard::_handleSaveSettings() {
         return;
     }
 
+    // Normalize Server URL
+    if (serverUrl.length() > 0) {
+        if (!serverUrl.startsWith("http://") && !serverUrl.startsWith("https://")) {
+            serverUrl = "http://" + serverUrl;
+        }
+        if (serverUrl.endsWith("/")) {
+            serverUrl = serverUrl.substring(0, serverUrl.length() - 1);
+        }
+    }
+
     _config.save(ssid, password, serverUrl);
     _server.send(200, "text/html",
         "<html><body style='background:#0f0c29;color:#4ecca3;font-family:sans-serif;"
@@ -90,6 +102,54 @@ void Dashboard::_handleSaveSettings() {
     Serial.println("[Dashboard] WiFi settings saved. Restarting...");
     delay(2000);
     ESP.restart();
+}
+
+// ─── Route: WiFi Scan (Async) ───────────────────────────────
+void Dashboard::_handleScanWifi() {
+    int result = WiFi.scanComplete();
+
+    if (result == -2) {
+        WiFi.scanNetworks(true);
+        Serial.println("[Dashboard] WiFi scan started (async)...");
+        _server.send(200, "application/json", "{\"status\":\"scanning\"}");
+    }
+    else if (result == -1) {
+        _server.send(200, "application/json", "{\"status\":\"scanning\"}");
+    }
+    else {
+        Serial.println("[Dashboard] Scan complete: " + String(result) + " networks");
+        String json = _scanNetworksJSON();
+        WiFi.scanDelete();
+        _server.send(200, "application/json", json);
+    }
+}
+
+String Dashboard::_scanNetworksJSON() {
+    int n = WiFi.scanComplete();
+    String json = "[";
+
+    String seen[20];
+    int uniqueCount = 0;
+
+    for (int i = 0; i < n && uniqueCount < 20; i++) {
+        String ssid = WiFi.SSID(i);
+        if (ssid.length() == 0) continue;
+
+        bool dup = false;
+        for (int j = 0; j < uniqueCount; j++) {
+            if (seen[j] == ssid) { dup = true; break; }
+        }
+        if (dup) continue;
+        seen[uniqueCount++] = ssid;
+
+        if (uniqueCount > 1) json += ",";
+        json += "{\"ssid\":\"" + ssid + "\","
+                "\"rssi\":" + String(WiFi.RSSI(i)) + ","
+                "\"open\":" + (WiFi.encryptionType(i) == WIFI_AUTH_OPEN
+                               ? "true" : "false") + "}";
+    }
+    json += "]";
+    return json;
 }
 
 // ════════════════════════════════════════════════════════════
@@ -1076,6 +1136,18 @@ String Dashboard::_buildSettingsPage() {
         .back-link:hover{color:#e0e0ff}
         .current{background:rgba(78,204,163,0.1);border:1px solid rgba(78,204,163,0.2);border-radius:8px;padding:12px;margin-bottom:24px;font-size:12px;color:#8888aa}
         .current strong{color:#4ecca3}
+        .btn-scan{width:100%;padding:10px;background:rgba(124,92,191,0.2);border:1px dashed rgba(124,92,191,0.5);border-radius:10px;color:#b0b0cc;font-size:14px;cursor:pointer;margin-bottom:12px;transition:all .3s}
+        .btn-scan:hover{background:rgba(124,92,191,0.35);color:#e0e0ff}
+        .spinner{text-align:center;color:#7c5cbf;padding:12px;font-size:13px}
+        .wifi-list{max-height:200px;overflow-y:auto;margin-bottom:12px;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+        .wifi-item{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;margin-bottom:6px;cursor:pointer;transition:background .2s}
+        .wifi-item:hover{background:rgba(124,92,191,0.2)}
+        .wifi-name{color:#e0e0ff;font-size:14px}
+        .wifi-meta{color:#8888aa;font-size:12px}
+        .wifi-list::-webkit-scrollbar{width:6px}
+        .wifi-list::-webkit-scrollbar-track{background:rgba(255,255,255,0.05);border-radius:3px}
+        .wifi-list::-webkit-scrollbar-thumb{background:rgba(124,92,191,0.4);border-radius:3px}
+        .wifi-list::-webkit-scrollbar-thumb:hover{background:rgba(124,92,191,0.6)}
     </style>
 </head>
 <body>
@@ -1095,6 +1167,9 @@ String Dashboard::_buildSettingsPage() {
 
     html += R"rawliteral(
         <form action="/settings/save" method="POST">
+            <button type="button" class="btn-scan" onclick="scanWifi()">&#128225; Scan WiFi</button>
+            <div id="scanSpinner" class="spinner" style="display:none;">Scanning nearby networks...</div>
+            <div id="scanResults" style="display:none;"></div>
             <div class="form-group">
                 <label>WiFi Network Name (SSID)</label>
                 <input type="text" name="ssid" placeholder="Enter your WiFi SSID" required>
@@ -1105,12 +1180,17 @@ String Dashboard::_buildSettingsPage() {
             </div>
             <div class="form-group">
                 <label>Server URL</label>
-                <input type="url" name="serverUrl" placeholder="http://your-server.com">
+                <input type="text" name="serverUrl" placeholder="e.g. 192.168.1.6:8000 (optional)">
             </div>
             <button type="submit" class="btn">Save &amp; Connect</button>
         </form>
         <a href="/dashboard" class="back-link">&larr; Back to Dashboard</a>
     </div>
+    <script>
+    function scanWifi(){document.getElementById('scanSpinner').style.display='block';document.getElementById('scanResults').style.display='none';pollScan();}
+    function pollScan(){fetch('/scan').then(r=>r.json()).then(data=>{if(data.status==='scanning'){setTimeout(pollScan,500);return;}document.getElementById('scanSpinner').style.display='none';data.sort((a,b)=>b.rssi-a.rssi);let html='<div class="wifi-list">';if(data.length===0){html+='<div style="text-align:center;color:#8888aa;padding:12px;">No networks found</div>';}data.forEach(n=>{let bars=n.rssi>-50?'\u25B0\u25B0\u25B0\u25B0':n.rssi>-65?'\u25B0\u25B0\u25B0 ':n.rssi>-80?'\u25B0\u25B0  ':'\u25B0   ';let lock=n.open?'\uD83D\uDD13':'\uD83D\uDD12';html+='<div class="wifi-item" onclick="selectWifi(\''+n.ssid.replace(/'/g,"\\\'")+'\',' +n.open+')"><div><div class="wifi-name">'+bars+' '+n.ssid+'</div><div class="wifi-meta">'+n.rssi+' dBm</div></div><span>'+lock+'</span></div>';});html+='</div>';let el=document.getElementById('scanResults');el.innerHTML=html;el.style.display='block';}).catch(()=>{document.getElementById('scanSpinner').style.display='none';alert('Scan failed. Try again.');});}
+    function selectWifi(ssid,isOpen){document.querySelector('input[name="ssid"]').value=ssid;let pw=document.querySelector('input[name="password"]');if(isOpen){pw.value='';pw.disabled=true;pw.placeholder='No password required';}else{pw.disabled=false;pw.placeholder='Enter your WiFi password';pw.focus();}document.getElementById('scanResults').style.display='none';}
+    </script>
 </body>
 </html>
 )rawliteral";

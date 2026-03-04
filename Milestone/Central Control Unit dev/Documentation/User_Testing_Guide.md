@@ -1,6 +1,6 @@
 # User Testing Guide — Smart Outlet Local Dashboard
 
-**Firmware:** v5.0.0 · **ESP32 (CCU)** · **Partition:** Huge APP (3MB / ~38% flash)
+**Firmware:** v8.0.0 · **ESP32 (CCU)** · **Partition:** Huge APP (3MB / ~38% flash)
 
 ---
 
@@ -24,14 +24,29 @@ On first boot (or after a factory reset), the ESP32 starts in **Setup Mode** and
 
 You will see the **CCU WiFi Setup** page:
 
-<img src="../Images/ESP32_Setup_page.jpg" width="300" alt="CCU WiFi Setup Page">
-
-**From here you have two options:**
+**From here you have three options:**
 
 | Option | Action | Result |
 |:-------|:-------|:-------|
-| **Save & Connect** | Enter SSID, Password, Server URL → tap **Save & Connect** | ESP32 restarts and joins your home WiFi in STA mode |
+| **📡 Scan WiFi** | Tap the scan button → select a network from the list | SSID auto-fills. Open networks disable the password field. |
+| **Save & Connect** | Enter SSID, Password (if needed), Server URL (optional) → tap **Save & Connect** | ESP32 restarts and joins your home WiFi in STA mode |
 | **Local Dashboard** | Tap **⚙ Local Dashboard** | Skips WiFi entirely — enters dashboard in AP mode |
+
+### WiFi Scanner Flow
+
+1. Tap **📡 Scan WiFi** — a spinner appears while the ESP32 scans nearby networks (~2-3 seconds).
+2. A list of networks appears, **sorted by signal strength** (strongest first).
+3. Each network shows: **signal bars** (▰▰▰▰ to ▰   ), **network name**, **dBm**, and a **lock icon** (🔒 secured / 🔓 open).
+4. **Tap a secured network** → SSID auto-fills, password field becomes active and focused.
+5. **Tap an open network** → SSID auto-fills, password field is **disabled** with "No password required".
+6. Enter the **Server URL** (e.g., `192.168.1.6:8000` — `http://` is auto-added if omitted). This is optional; leave empty for WiFi-only mode without cloud sync.
+7. Tap **Save & Connect**.
+
+**Visual Walkthrough:**
+<img src="../Images/ESP32_wifi_setup_view.jpg" width="200" alt="Step 1: Setup Page">
+<img src="../Images/ESP32_wifi_setup_Scan_WiFi.jpg" width="200" alt="Step 2: Scan WiFi">
+<img src="../Images/ESP32_wifi_setup_Fill_forms.jpg" width="200" alt="Step 3: Fill Forms">
+<img src="../Images/ESP32_wifi_setup_Connected.jpg" width="200" alt="Step 4: Connected">
 
 > [!TIP]
 > For local-only testing (no server/cloud), just tap **Local Dashboard**. The dashboard stays accessible at `192.168.4.1` while your device stays connected to **CCU-Setup**.

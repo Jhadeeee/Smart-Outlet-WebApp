@@ -11,7 +11,7 @@
 | Python                   | 3.10+                                     |
 | PostgreSQL               | 14+ (with a database created for the app) |
 | Git                      | For cloning the repository                |
-| ESP32 with CCU Firmware  | v4.0.0+ (already flashed and WiFi configured) |
+| ESP32 with CCU Firmware  | v8.0.0+ (already flashed and WiFi configured) |
 | PIC Smart Outlet         | With Device ID set (e.g., `0xFE`)         |
 
 ---
