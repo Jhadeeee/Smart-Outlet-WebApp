@@ -196,17 +196,40 @@
         .total-load-card {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             border-radius: 20px;
-            padding: 28px 30px;
-            text-align: center;
             color: white;
             box-shadow: 0 20px 50px rgba(102, 126, 234, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.15);
             margin-bottom: 16px;
             position: relative;
             overflow: hidden;
             animation: fadeInUp 0.5s ease-out;
+            transition: background 0.6s ease;
         }
 
-        .total-load-card::before {
+        .total-load-card.load-ok {
+            background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
+            box-shadow: 0 20px 50px rgba(22, 163, 74, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+        }
+
+        .total-load-card.load-warn {
+            background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+            box-shadow: 0 20px 50px rgba(217, 119, 6, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+        }
+
+        .total-load-card.load-danger {
+            background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+            box-shadow: 0 20px 50px rgba(220, 38, 38, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+            animation: fadeInUp 0.5s ease-out, pulse-glow 2s ease-in-out infinite;
+        }
+
+        .total-load-header {
+            padding: 28px 30px;
+            text-align: center;
+            cursor: pointer;
+            position: relative;
+            z-index: 1;
+        }
+
+        .total-load-header::before {
             content: '';
             position: absolute;
             top: -50%;
@@ -217,7 +240,7 @@
             border-radius: 50%;
         }
 
-        .total-load-card::after {
+        .total-load-header::after {
             content: '';
             position: absolute;
             bottom: -40%;
@@ -226,6 +249,20 @@
             height: 150px;
             background: rgba(255, 255, 255, 0.06);
             border-radius: 50%;
+        }
+
+        .total-load-chevron {
+            position: absolute;
+            right: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 16px;
+            opacity: 0.6;
+            transition: transform 0.3s;
+        }
+
+        .total-load-card.expanded .total-load-chevron {
+            transform: translateY(-50%) rotate(180deg);
         }
 
         .total-load-label {
@@ -251,6 +288,155 @@
             font-weight: 500;
             opacity: 0.8;
             margin-left: 4px;
+        }
+
+        .total-load-status {
+            font-size: 12px;
+            font-weight: 600;
+            margin-top: 8px;
+            opacity: 0.85;
+            letter-spacing: 0.5px;
+        }
+
+        /* ─── Breaker Expanded Body ─── */
+        .breaker-body {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.35s ease, padding 0.35s ease;
+            padding: 0 24px;
+            border-top: 0px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .total-load-card.expanded .breaker-body {
+            max-height: 600px;
+            padding: 16px 24px 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.15);
+        }
+
+        .breaker-section-label {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            opacity: 0.6;
+            margin-bottom: 10px;
+        }
+
+        .breaker-outlet-row {
+            display: flex;
+            align-items: center;
+            padding: 10px 12px;
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 10px;
+            margin-bottom: 6px;
+        }
+
+        .breaker-outlet-name {
+            flex: 1;
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .breaker-outlet-id {
+            font-size: 11px;
+            opacity: 0.5;
+            font-family: monospace;
+            margin-right: 10px;
+        }
+
+        .breaker-outlet-current {
+            font-size: 13px;
+            font-weight: 700;
+            margin-right: 12px;
+            min-width: 65px;
+            text-align: right;
+        }
+
+        .btn-cut-outlet {
+            padding: 5px 14px;
+            background: rgba(239, 68, 68, 0.2);
+            border: 1px solid rgba(239, 68, 68, 0.4);
+            border-radius: 8px;
+            color: #fca5a5;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-cut-outlet:hover {
+            background: rgba(239, 68, 68, 0.4);
+            color: white;
+        }
+
+        .btn-cut-all-breaker {
+            display: block;
+            width: 100%;
+            padding: 10px;
+            background: rgba(239, 68, 68, 0.15);
+            border: 1px solid rgba(239, 68, 68, 0.4);
+            border-radius: 10px;
+            color: #fca5a5;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-top: 10px;
+        }
+
+        .btn-cut-all-breaker:hover {
+            background: rgba(239, 68, 68, 0.35);
+            color: white;
+        }
+
+        .breaker-threshold-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .breaker-threshold-row label {
+            font-size: 12px;
+            font-weight: 600;
+            opacity: 0.7;
+            margin: 0;
+            white-space: nowrap;
+        }
+
+        .breaker-threshold-row input {
+            width: 70px;
+            padding: 6px 8px;
+            background: rgba(255, 255, 255, 0.12);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            color: white;
+            font-size: 13px;
+            font-weight: 700;
+            text-align: center;
+        }
+
+        .breaker-threshold-row input:focus {
+            outline: none;
+            border-color: rgba(255, 255, 255, 0.5);
+        }
+
+        .breaker-threshold-row .btn-sm {
+            padding: 6px 14px;
+            background: rgba(255, 255, 255, 0.15);
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            border-radius: 8px;
+            color: white;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .breaker-threshold-row .btn-sm:hover {
+            background: rgba(255, 255, 255, 0.25);
         }
 
         /* ─── Threshold Bars ─── */
@@ -1209,6 +1395,10 @@
                                 <i class="fas fa-cog"></i>
                                 <span>Admin Panel</span>
                             </a>
+                            <a href="{% url 'outlets:event_history' %}" class="profile-menu-item">
+                                <i class="fas fa-history"></i>
+                                <span>Event History</span>
+                            </a>
                             <a href="{% url 'outlets:logout' %}" class="profile-menu-item logout">
                                 <i class="fas fa-sign-out-alt"></i>
                                 <span>Logout</span>
@@ -1226,25 +1416,44 @@
             <div class="row justify-content-center">
                 <div class="col-12 col-md-10 col-lg-8">
 
-                    <!-- Total Load Current -->
+                    <!-- Total Load Current (Expandable Breaker Monitor) -->
                     <div class="section-label">System Overview</div>
-                    <div class="total-load-card">
-                        <div class="total-load-label">Total Load Current</div>
-                        <div class="total-load-value" id="totalCurrent">
-                            {{ total_current_ma }}<span class="total-load-unit">mA</span>
+                    <div class="total-load-card" id="breakerCard">
+                        <div class="total-load-header" onclick="toggleBreakerPanel()">
+                            <div class="total-load-label">Total Load Current</div>
+                            <div class="total-load-value" id="totalCurrent">
+                                {{ total_current_ma }}<span class="total-load-unit">mA</span>
+                            </div>
+                            <div class="total-load-status" id="breakerStatus">Normal</div>
+                            <i class="fas fa-chevron-down total-load-chevron"></i>
                         </div>
-                    </div>
 
-                    <!-- Main Breaker Controls -->
-                    <div class="limit-bar breaker">
-                        <div class="input-group-custom">
-                            <label>Breaker Limit:</label>
-                            <input type="text" id="mainThresholdInput" value="15000">
-                            <span class="unit">mA</span>
-                        </div>
-                        <div style="display:flex; gap:8px">
-                            <button class="btn-save" onclick="setMainThreshold()">Set</button>
-                            <button class="btn-save btn-danger" onclick="cutAllPower()">⛔ Cut All Power</button>
+                        <div class="breaker-body">
+                            <!-- Active Outlet List -->
+                            <div class="breaker-section-label">Outlet Monitor</div>
+                            <div id="breakerOutletList">
+                                {% for item in outlet_data %}
+                                <div class="breaker-outlet-row" id="breaker-row-{{ item.outlet.device_id }}">
+                                    <span class="breaker-outlet-name">{{ item.outlet.name }}</span>
+                                    <span class="breaker-outlet-id">0x{{ item.outlet.device_id }}</span>
+                                    <span class="breaker-outlet-current" id="breaker-cur-{{ item.outlet.device_id }}">0
+                                        mA</span>
+                                    <button class="btn-cut-outlet"
+                                        onclick="cutOutletPower('{{ item.outlet.device_id }}')">Cut</button>
+                                </div>
+                                {% endfor %}
+                            </div>
+
+                            <!-- Cut All Power -->
+                            <button class="btn-cut-all-breaker" onclick="cutAllPower()">⛔ Cut All Power</button>
+
+                            <!-- Threshold Setting -->
+                            <div class="breaker-threshold-row">
+                                <label>Breaker Limit:</label>
+                                <input type="text" id="mainThresholdInput" value="15000">
+                                <label>mA</label>
+                                <button class="btn-sm" onclick="setMainThreshold()">Set</button>
+                            </div>
                         </div>
                     </div>
 
@@ -1725,13 +1934,74 @@
         }
         }
 
+        // ─── Breaker Panel Toggle ───
+        let breakerExpanded = false;
+        let breakerThreshold = 15000;  // Default threshold in mA
+
+        function toggleBreakerPanel() {
+            const card = document.getElementById('breakerCard');
+            breakerExpanded = !breakerExpanded;
+            if (breakerExpanded) {
+                card.classList.add('expanded');
+                updateBreakerOutletList();
+            } else {
+                card.classList.remove('expanded');
+            }
+        }
+
+        // ─── Update Breaker Color & Status ───
+        function updateBreakerColor(currentMa) {
+            const card = document.getElementById('breakerCard');
+            const status = document.getElementById('breakerStatus');
+            card.classList.remove('load-ok', 'load-warn', 'load-danger');
+
+            if (currentMa <= 0) {
+                // Default purple gradient (no load)
+                if (status) status.textContent = 'No Load';
+            } else {
+                const pct = breakerThreshold > 0 ? (currentMa / breakerThreshold) : 0;
+                if (pct >= 1.0) {
+                    card.classList.add('load-danger');
+                    if (status) status.textContent = '⚠ OVERLOAD';
+                } else if (pct >= 0.8) {
+                    card.classList.add('load-warn');
+                    if (status) status.textContent = 'Near Limit';
+                } else {
+                    card.classList.add('load-ok');
+                    if (status) status.textContent = 'Normal';
+                }
+            }
+        }
+
+        // ─── Update Outlet List in Breaker Panel ───
+        function updateBreakerOutletList() {
+            document.querySelectorAll('.outlet-card').forEach(card => {
+                const deviceId = card.id.replace('outlet-', '');
+                const subtitle = card.querySelector('.outlet-subtitle');
+                const curEl = document.getElementById(`breaker-cur-${deviceId}`);
+                if (curEl && subtitle) {
+                    const match = subtitle.textContent.trim().match(/^(\d+)\s*mA/);
+                    const totalMa = match ? parseInt(match[1]) : 0;
+                    curEl.textContent = `${totalMa} mA`;
+                }
+            });
+        }
+
+        // ─── Cut Single Outlet (both sockets) ───
+        async function cutOutletPower(deviceId) {
+            if (!confirm(`Cut power to outlet 0x${deviceId}? (Both sockets OFF)`)) return;
+            await sendCommand(deviceId, 'relay_off', 'a');
+            await sendCommand(deviceId, 'relay_off', 'b');
+            showToast(`Power cut: 0x${deviceId}`, 'success');
+        }
+
         // ─── Main Breaker Threshold ───
         function setMainThreshold() {
             const input = document.getElementById('mainThresholdInput');
             const val = parseInt(input.value);
             if (val > 0) {
-                showToast(`Main Breaker threshold saved: ${val}mA`, 'success');
-                // NOTE: In a real implementation this would save to the CCU model in DB
+                breakerThreshold = val;
+                showToast(`Breaker threshold set: ${val}mA`, 'success');
             }
         }
 
@@ -1797,10 +2067,11 @@
                     const payload = data.data;
 
                     if (isBreaker) {
-                        // Update Total Load Current
+                        // Update Total Load Current + Color
                         const totalEl = document.getElementById('totalCurrent');
-                        if (totalEl && payload.current_amps !== undefined) {
+                        if (totalEl && payload.current_ma !== undefined) {
                             totalEl.innerHTML = `${payload.current_ma}<span class="total-load-unit">mA</span>`;
+                            updateBreakerColor(payload.current_ma);
                         }
                     } else {
                         // Update Outlet Data
@@ -1827,6 +2098,7 @@
 
                             if (subtitleEl) subtitleEl.innerHTML = `${totalMA} mA · ${statusText}`;
                             updateStatusBadges();
+                            if (breakerExpanded) updateBreakerOutletList();
                         }
 
                         // Detailed socket readings + toggles: ONLY for focused device
