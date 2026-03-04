@@ -1,6 +1,6 @@
 # 🔌 Smart Outlet System — Project Milestones
 
-**Last Updated:** March 4, 2026 (Breaker ADC Fix)
+**Last Updated:** March 4, 2026 (v7.0.0 — Breaker Monitor UI, Event History, Noise Filters)
 
 ---
 
@@ -15,9 +15,9 @@
 | Component                | Version | Status         | Documentation                                                                 |
 |:-------------------------|:--------|:---------------|:------------------------------------------------------------------------------|
 | SmartOutlet Firmware     | v5.3.1  | ✅ Stable      | [FIRMWARE_DOCS.md](Smart%20Outlet%20Device%20dev/Documentation/FIRMWARE_DOCS.md) |
-| CCU Firmware (ESP32)     | v4.3.0  | ✅ Stable      | [FIRMWARE_DOCS.md](Central%20Control%20Unit%20dev/Documentation/FIRMWARE_DOCS.md) |
-| Smart-Outlet-WebApp      | v1.3.0  | ✅ Stable      | [WEBAPP_DOCS.md](Smart-Outlet-WebApp%20dev/Documentation/WEBAPP_DOCS.md)            |
-| Outlet Breaker (SCT013)  | v4.3.0  | ✅ Stable      | [FIRMWARE_DOCS.md](Central%20Control%20Unit%20dev/Documentation/FIRMWARE_DOCS.md) |
+| CCU Firmware (ESP32)     | v5.0.0  | ✅ Stable      | [FIRMWARE_DOCS.md](Central%20Control%20Unit%20dev/Documentation/FIRMWARE_DOCS.md) |
+| Smart-Outlet-WebApp      | v7.0.0  | ✅ Stable      | [WEBAPP_DOCS.md](Smart-Outlet-WebApp%20dev/Documentation/WEBAPP_DOCS.md)            |
+| Outlet Breaker (SCT013)  | v5.0.0  | ✅ Stable      | [FIRMWARE_DOCS.md](Central%20Control%20Unit%20dev/Documentation/FIRMWARE_DOCS.md) |
 
 ---
 
@@ -27,6 +27,7 @@
 
 | Date       | Version | Milestone                                                                 |
 |:-----------|:--------|:--------------------------------------------------------------------------|
+| 2026-03-04 | v5.0.0  | Partition scheme change — Huge APP (3MB No OTA / 1MB SPIFFS), flash usage down from 91% to ~38% |
 | 2026-03-04 | v4.3.0  | Breaker ADC fix — blocking readFresh() immune to WiFi noise, direct BreakerMonitor pointer |
 | 2026-03-03 | v4.2.0  | Focus Device — cloud loop only reads expanded device, auto-tare breaker   |
 | 2026-03-03 | v4.1.0  | Direct API routes for Django, event-driven serial output, breaker cache   |
@@ -47,6 +48,7 @@
 
 | Date       | Version | Milestone                                                                 |
 |:-----------|:--------|:--------------------------------------------------------------------------|
+| 2026-03-04 | v7.0.0  | Expandable breaker monitor with color indicators, noise floor filters (0-100mA outlet, 0-250mA breaker), real-time badge updates, Event History page with filters + card/table views |
 | 2026-03-03 | v1.3.0  | Focus Device — expand/collapse outlets, disabled controls when collapsed  |
 | 2026-03-03 | v1.2.0  | Direct ESP32 communication, EventLog model, mA display, toggle loading    |
 | 2026-02-24 | v1.1.0  | Fully functional Test Dashboard — 2-way sync queueing, Telemetry log UI   |
@@ -61,10 +63,14 @@
 - [x] WebApp full cloud integration — ESP32 ↔ Django server data sync
 - [x] Direct ESP32 communication — relay commands via HTTP (bypasses polling queue)
 - [x] Focus Device — only read/control the expanded outlet (mirrors local dashboard)
+- [x] Expandable breaker monitor — color-coded load card, per-outlet cut buttons
+- [x] Noise floor filters — clamp sensor noise to 0 (PIC: 0-100mA, SCT013: 0-250mA)
+- [x] Event History page — filterable event log with card/table views
+- [x] Real-time status badges — Active/Inactive counts update live via WebSocket
 - [ ] Auto cut-off — automatically kill all outlets when breaker threshold exceeded
 - [x] Online Dashboard — CRUD for outlets, threshold config, AI chat panel
 - [ ] Persistent device storage on ESP32 (SPIFFS/NVS instead of RAM)
-- [ ] OTA firmware updates for ESP32
+- [ ] OTA firmware updates for ESP32 (currently sacrificed for flash space via Huge APP partition)
 
 ---
 

@@ -84,11 +84,15 @@ Follow the prompts to create your admin account (username, email, password).
 
 ## Step 6: Start the Development Server
 
-```bash
-python manage.py runserver 0.0.0.0:8000
+```powershell
+# Step 1: Activate the virtual environment
+.\.venv\Scripts\Activate
+
+# Step 2: Start the server
+.venv\Scripts\python.exe manage.py runserver 0.0.0.0:8000
 ```
 
-> **Important:** Use `0.0.0.0:8000` (not `127.0.0.1:8000`) so the ESP32 can reach the server from the local network.
+> **Important:** Use `0.0.0.0:8000` (not `127.0.0.1:8000`) so the ESP32 can reach the server from the local network. The development server uses Daphne (ASGI) which supports both HTTP and WebSocket connections.
 
 Open your browser and go to `http://localhost:8000/`
 
