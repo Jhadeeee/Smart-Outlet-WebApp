@@ -53,7 +53,7 @@ Look for the one starting with `192.168.x.x` — that's your LAN IP.
 # Press Ctrl+C
 
 # If you accidentally closed the terminal:
-taskkill /F /PID (Get-NetTCPConnection -LocalPort 8000 -ErrorAction SilentlyContinue).OwningProcess
+Get-NetTCPConnection -LocalPort 8000 -ErrorAction SilentlyContinue | ForEach-Object { taskkill /F /PID $_.OwningProcess }
 ```
 
 ### 5. Run Database Migrations
@@ -75,7 +75,7 @@ taskkill /F /PID (Get-NetTCPConnection -LocalPort 8000 -ErrorAction SilentlyCont
 | `.venv\Scripts\python.exe manage.py makemigrations outlets` | Generate migration files |
 | `.venv\Scripts\python.exe manage.py migrate` | Apply migrations to database |
 | `.venv\Scripts\python.exe manage.py createsuperuser` | Create admin user |
-| `taskkill /F /PID (Get-NetTCPConnection -LocalPort 8000 -ErrorAction SilentlyContinue).OwningProcess` | Kill server on port 8000 |
+| `Get-NetTCPConnection -LocalPort 8000 -ErrorAction SilentlyContinue \| ForEach-Object { taskkill /F /PID $_.OwningProcess }` | Kill server on port 8000 |
 
 ---
 

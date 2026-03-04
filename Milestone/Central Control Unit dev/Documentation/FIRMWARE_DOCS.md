@@ -60,6 +60,17 @@
 
 ---
 
+## Circuit Simulation
+
+The CCU circuit simulation is available as a Proteus schematic document:
+
+📄 **[CCU_Simulation_2.0.0.PDF](CCU_Simulation_2.0.0.PDF)** — v2.0.0 Proteus simulation schematic for the ESP32 + HC-12 + SCT013 circuit.
+
+> [!NOTE]
+> Open the PDF to view the full schematic including ESP32 pin connections, HC-12 RF module wiring, SCT013 burden resistor circuit, and power supply layout.
+
+---
+
 ## State Machine
 
 The firmware operates in **three modes**, chosen at boot based on saved credentials:
