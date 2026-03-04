@@ -50,6 +50,8 @@ private:
     void _handleDashboard();         // GET  /dashboard
     void _handleSettings();          // GET  /settings
     void _handleSaveSettings();      // POST /settings/save
+    void _handleScanWifi();          // GET  /scan
+    String _scanNetworksJSON();      // Build JSON from scan results
 
     // ─── Device CRUD API ─────────────────────────
     void _handleApiDeviceList();     // GET  /api/devices

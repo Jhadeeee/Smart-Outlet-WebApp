@@ -1,7 +1,7 @@
 # Smart-Outlet-WebApp — Developer Documentation
 
 **Framework:** Django 5.2 · **ASGI Server:** Daphne · **Database:** PostgreSQL  
-**Real-Time:** Django Channels (WebSockets) · **Version:** v7.0.0
+**Real-Time:** Django Channels (WebSockets) · **Version:** v8.0.0
 
 ---
 
@@ -13,7 +13,7 @@ All commands run from the project root: `C:\Users\USER\Documents\Smart-Outlet-We
 
 ```powershell
 # Step 1: Activate the virtual environment
-.\.venv\Scripts\Activate
+.\venv\Scripts\Activate
 
 # Step 2: Start the development server (supports WebSockets via Daphne ASGI)
 .venv\Scripts\python.exe manage.py runserver 0.0.0.0:8000
@@ -70,7 +70,7 @@ Get-NetTCPConnection -LocalPort 8000 -ErrorAction SilentlyContinue | ForEach-Obj
 
 | Command | Description |
 |:--------|:------------|
-| `.\.venv\Scripts\Activate` | Activate the Python virtual environment |
+| `.\venv\Scripts\Activate` | Activate the Python virtual environment |
 | `.venv\Scripts\python.exe manage.py runserver 0.0.0.0:8000` | Start server (with WebSocket support via Daphne ASGI) |
 | `.venv\Scripts\python.exe manage.py makemigrations outlets` | Generate migration files |
 | `.venv\Scripts\python.exe manage.py migrate` | Apply migrations to database |

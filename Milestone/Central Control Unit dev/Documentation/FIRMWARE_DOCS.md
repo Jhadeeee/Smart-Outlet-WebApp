@@ -1,7 +1,7 @@
 # Central Control Unit (CCU) Firmware — Developer Documentation
 
 **MCU:** ESP32 · **Framework:** Arduino · **IDE:** Arduino IDE / PlatformIO  
-**Firmware:** v5.0.0 · **Communication:** HC-12 433MHz RF + WiFi  
+**Firmware:** v8.0.0 · **Communication:** HC-12 433MHz RF + WiFi  
 **Partition Scheme:** Huge APP (3MB No OTA / 1MB SPIFFS) — ~38% flash usage
 
 ---
@@ -343,9 +343,19 @@ These routes allow the Django server to send commands directly to the ESP32 via 
 When no WiFi credentials exist, the ESP32 starts an open AP (`CCU-Setup`):
 
 1. DNS server redirects **all** domains to `192.168.4.1`
-2. Web form collects: SSID, Password, Server URL
-3. On submit → saves to NVS → restarts in STA mode
-4. "Local Dashboard" button → skips WiFi, enters LOCAL_DASHBOARD mode
+2. Web form collects: SSID, Password, Server URL (optional — auto-prepends `http://` if omitted)
+3. **📡 Scan WiFi** button — scans nearby networks, shows list sorted by signal strength
+4. Tap a network → SSID auto-fills. Open networks (🔓) disable the password field.
+5. On submit → saves to NVS → restarts in STA mode
+6. "Local Dashboard" button → skips WiFi, enters LOCAL_DASHBOARD mode
+
+### Scan WiFi Endpoint
+
+| Method | Route   | Action | Response |
+|:-------|:--------|:-------|:---------|
+| GET    | `/scan` | Async WiFi scan | `{"status":"scanning"}` while in progress, or `[{"ssid":"...", "rssi":-45, "open":false}, ...]` when complete |
+
+> **Note:** The scan uses `WiFi.scanNetworks(true)` (non-blocking). The JavaScript polls `/scan` every 500ms until results are ready. The AP stays fully responsive during the scan.
 
 ---
 

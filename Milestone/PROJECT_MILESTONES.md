@@ -1,6 +1,6 @@
 # 🔌 Smart Outlet System — Project Milestones
 
-**Last Updated:** March 4, 2026 (v7.0.0 — Breaker Monitor UI, Event History, Noise Filters)
+**Last Updated:** March 5, 2026 (v8.0.0 — WiFi Scanner, Server URL Auto-Format, UI Polish)
 
 ---
 
@@ -15,9 +15,9 @@
 | Component                | Version | Status         | Documentation                                                                 |
 |:-------------------------|:--------|:---------------|:------------------------------------------------------------------------------|
 | SmartOutlet Firmware     | v5.3.1  | ✅ Stable      | [FIRMWARE_DOCS.md](Smart%20Outlet%20Device%20dev/Documentation/FIRMWARE_DOCS.md) |
-| CCU Firmware (ESP32)     | v5.0.0  | ✅ Stable      | [FIRMWARE_DOCS.md](Central%20Control%20Unit%20dev/Documentation/FIRMWARE_DOCS.md) |
-| Smart-Outlet-WebApp      | v7.0.0  | ✅ Stable      | [WEBAPP_DOCS.md](Smart-Outlet-WebApp%20dev/Documentation/WEBAPP_DOCS.md)            |
-| Outlet Breaker (SCT013)  | v5.0.0  | ✅ Stable      | [FIRMWARE_DOCS.md](Central%20Control%20Unit%20dev/Documentation/FIRMWARE_DOCS.md) |
+| CCU Firmware (ESP32)     | v8.0.0  | ✅ Stable      | [FIRMWARE_DOCS.md](Central%20Control%20Unit%20dev/Documentation/FIRMWARE_DOCS.md) |
+| Smart-Outlet-WebApp      | v8.0.0  | ✅ Stable      | [WEBAPP_DOCS.md](Smart-Outlet-WebApp%20dev/Documentation/WEBAPP_DOCS.md)            |
+| Outlet Breaker (SCT013)  | v8.0.0  | ✅ Stable      | [FIRMWARE_DOCS.md](Central%20Control%20Unit%20dev/Documentation/FIRMWARE_DOCS.md) |
 
 ---
 
@@ -27,6 +27,7 @@
 
 | Date       | Version | Milestone                                                                 |
 |:-----------|:--------|:--------------------------------------------------------------------------|
+| 2026-03-05 | v8.0.0  | WiFi Scanner in Captive Portal & Dashboard Settings, frosted blur UI, Server URL auto-formatting |
 | 2026-03-04 | v5.0.0  | Partition scheme change — Huge APP (3MB No OTA / 1MB SPIFFS), flash usage down from 91% to ~38% |
 | 2026-03-04 | v4.3.0  | Breaker ADC fix — blocking readFresh() immune to WiFi noise, direct BreakerMonitor pointer |
 | 2026-03-03 | v4.2.0  | Focus Device — cloud loop only reads expanded device, auto-tare breaker   |
@@ -48,6 +49,7 @@
 
 | Date       | Version | Milestone                                                                 |
 |:-----------|:--------|:--------------------------------------------------------------------------|
+| 2026-03-05 | v8.0.0  | Version sync with system-wide v8.0.0 bump, documentation updates         |
 | 2026-03-04 | v7.0.0  | Expandable breaker monitor with color indicators, noise floor filters (0-100mA outlet, 0-250mA breaker), real-time badge updates, Event History page with filters + card/table views |
 | 2026-03-03 | v1.3.0  | Focus Device — expand/collapse outlets, disabled controls when collapsed  |
 | 2026-03-03 | v1.2.0  | Direct ESP32 communication, EventLog model, mA display, toggle loading    |
