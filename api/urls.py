@@ -14,4 +14,6 @@ urlpatterns = [
     path('focus/', views.get_focus_device, name='get_focus_device'),
     path('focus/clear/', views.clear_focus_device, name='clear_focus_device'),
     path('focus/<str:device_id>/', views.set_focus_device, name='set_focus_device'),
+    # Google Sheets export
+    path('export/sheets/', views.export_for_sheets, name='export_for_sheets'),
 ]

@@ -113,8 +113,8 @@ def receive_sensor_data(request):
         
         # Parse values
         is_overload = data.get('is_overload', False)
-        current_a = int(data['current_a'])
-        current_b = int(data['current_b'])
+        current_a = max(0, int(data['current_a']))
+        current_b = max(0, int(data['current_b']))
         
         if current_a == 65535 or current_b == 65535:
             is_overload = True
@@ -249,7 +249,7 @@ def receive_breaker_data(request):
             }, status=400)
         
         ccu_id = str(data['ccu_id']).upper().zfill(2)  # '1' → '01' to match registered format
-        current_ma = int(data['current_ma'])
+        current_ma = max(0, int(data['current_ma']))
         
         # Noise floor filter: SCT-013 sensor outputs baseline noise with no load.
         BREAKER_NOISE_FLOOR_MA = 250
@@ -554,6 +554,85 @@ def log_event(request):
         return JsonResponse({'success': True, 'message': 'Event logged'})
     except Exception as e:
         return JsonResponse({'success': False, 'message': str(e)}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def export_for_sheets(request):
+    """
+    API endpoint for Google Apps Script to fetch sensor data for spreadsheet.
+    URL: GET /api/export/sheets/?key=<SHEETS_API_KEY>&days=30
+
+    Returns sensor data grouped by outlet + main breaker readings.
+    Protected by a simple API key (no login required).
+    """
+    from django.conf import settings as django_settings
+
+    # Validate API key
+    api_key = request.GET.get('key', '')
+    expected_key = getattr(django_settings, 'SHEETS_API_KEY', '')
+    if not expected_key or api_key != expected_key:
+        return JsonResponse({
+            'success': False,
+            'message': 'Invalid or missing API key'
+        }, status=403)
+
+    # Date range filter (default: last 30 days)
+    try:
+        days = int(request.GET.get('days', 30))
+    except (ValueError, TypeError):
+        days = 30
+    cutoff = timezone.now() - timedelta(days=days)
+
+    # --- Sensor Data per Outlet ---
+    outlets = Outlet.objects.all()
+    outlets_data = {}
+    for outlet in outlets:
+        readings = SensorData.objects.filter(
+            outlet=outlet,
+            timestamp__gte=cutoff
+        ).order_by('timestamp')
+
+        outlets_data[outlet.device_id] = {
+            'name': outlet.name,
+            'device_id': outlet.device_id,
+            'threshold': outlet.threshold,
+            'readings': [
+                {
+                    'timestamp': r.timestamp.astimezone(
+                        timezone.get_current_timezone()
+                    ).strftime('%Y-%m-%d %I:%M:%S %p'),
+                    'current_a': r.current_a,
+                    'current_b': r.current_b,
+                    'threshold': outlet.threshold,
+                    'is_overload': r.is_overload,
+                }
+                for r in readings
+            ]
+        }
+
+    # --- Main Breaker Data ---
+    breaker_readings = MainBreakerReading.objects.filter(
+        timestamp__gte=cutoff
+    ).order_by('timestamp')
+
+    breaker_data = [
+        {
+            'timestamp': r.timestamp.astimezone(
+                timezone.get_current_timezone()
+            ).strftime('%Y-%m-%d %I:%M:%S %p'),
+            'ccu_id': r.ccu_id,
+            'current_ma': r.current_ma,
+            'threshold': r.threshold,
+        }
+        for r in breaker_readings
+    ]
+
+    return JsonResponse({
+        'success': True,
+        'outlets': outlets_data,
+        'breaker': breaker_data,
+    })
 
 
 # ═══════════════════════════════════════════════════════════
