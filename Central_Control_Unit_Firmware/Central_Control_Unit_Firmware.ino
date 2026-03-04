@@ -78,6 +78,10 @@ unsigned int  cloudFailCount = 0;    // Tracks consecutive failures to suppress 
 unsigned long lastBreakerRead = 0;   // Timer for periodic blocking breaker reads
 const unsigned long BREAKER_READ_INTERVAL = 1500;  // 1.5s — same as dashboard poll
 
+// Background polling for non-focused outlets (round-robin)
+unsigned long lastBackgroundPoll = 0;
+uint8_t       backgroundDeviceIndex = 0;
+
 // ─── Factory Reset Check ────────────────────────────────────
 void checkFactoryReset() {
     pinMode(RESET_BTN_PIN, INPUT_PULLUP);
@@ -483,7 +487,127 @@ void loop() {
                         }
                     }
                 }
-                // If no device focused → skip sensor reads entirely (silent)
+
+                // ── Background Round-Robin: poll non-focused devices every 30s ──
+                if (millis() - lastBackgroundPoll >= BACKGROUND_POLL_INTERVAL_MS
+                    && outletManager.getDeviceCount() > 0) {
+                    lastBackgroundPoll = millis();
+
+                    // Find the next device that is NOT the focused one
+                    uint8_t totalDevices = outletManager.getDeviceCount();
+                    uint8_t focusId = 0;
+                    if (focusedId.length() > 0) {
+                        focusId = (uint8_t)strtol(focusedId.c_str(), NULL, 16);
+                    }
+
+                    // Try each device once to find a non-focused one
+                    for (uint8_t attempt = 0; attempt < totalDevices; attempt++) {
+                        if (backgroundDeviceIndex >= totalDevices) {
+                            backgroundDeviceIndex = 0;
+                        }
+
+                        OutletDevice& bgDev = outletManager.getDevice(backgroundDeviceIndex);
+                        backgroundDeviceIndex++;  // Advance for next cycle
+
+                        // Skip the focused device (it's already polled every 2s)
+                        if (bgDev.getDeviceId() == focusId && focusId != 0) {
+                            continue;
+                        }
+
+                        // Found a non-focused device — poll it
+                        outletManager.selectDevice(bgDev.getDeviceId());
+
+                        // Flush stale RX data
+                        while(outletManager.getHC12().available()) {
+                            outletManager.getHC12().read();
+                        }
+
+                        outletManager.readSensors();
+
+                        // Wait for PIC replies (Socket A & B)
+                        unsigned long bgWait = millis();
+                        while (millis() - bgWait < 350) {
+                            outletManager.update();
+                        }
+
+                        // Build and send sensor data payload
+                        String bgHexId = String(bgDev.getDeviceId(), HEX);
+                        bgHexId.toUpperCase();
+                        String bgPayload = "{\"device_id\":\"";
+                        if (bgDev.getDeviceId() < 0x10) bgPayload += "0";
+                        bgPayload += bgHexId + "\",";
+                        bgPayload += "\"current_a\":" + String(bgDev.getCurrentA()) + ",";
+                        bgPayload += "\"current_b\":" + String(bgDev.getCurrentB()) + ",";
+                        bgPayload += "\"relay_a\":" + String(bgDev.getRelayA() == 1 ? "true" : "false") + ",";
+                        bgPayload += "\"relay_b\":" + String(bgDev.getRelayB() == 1 ? "true" : "false") + ",";
+                        bool bgOverload = (bgDev.getCurrentA() == 65535 || bgDev.getCurrentB() == 65535);
+                        bgPayload += "\"is_overload\":" + String(bgOverload ? "true" : "false") + "}";
+
+                        int bgRes = cloud.sendSensorData(bgPayload);
+                        if (bgRes != 200 && bgRes != 201) anyFail = true;
+
+                        // Also fetch & execute pending commands for this device
+                        String bgDevIdStr = String(bgDev.getDeviceId(), HEX);
+                        bgDevIdStr.toUpperCase();
+                        if (bgDev.getDeviceId() < 0x10) bgDevIdStr = "0" + bgDevIdStr;
+
+                        String bgCmdJson = cloud.fetchCommands(bgDevIdStr);
+                        if (bgCmdJson.indexOf("\"success\": true") >= 0 || bgCmdJson.indexOf("\"success\":true") >= 0) {
+                            int bgStartIdx = 0;
+                            while (true) {
+                                bgStartIdx = bgCmdJson.indexOf("{\"command\":", bgStartIdx);
+                                if (bgStartIdx < 0) break;
+                                int bgEndIdx = bgCmdJson.indexOf("}", bgStartIdx);
+                                if (bgEndIdx < 0) break;
+
+                                String bgCmdObj = bgCmdJson.substring(bgStartIdx, bgEndIdx);
+
+                                String bgCmd = "";
+                                int bgCmdStart = bgCmdObj.indexOf("\"command\": \"");
+                                if (bgCmdStart >= 0) {
+                                    bgCmdStart += 12;
+                                    int bgCmdEnd = bgCmdObj.indexOf("\"", bgCmdStart);
+                                    if (bgCmdEnd >= 0) bgCmd = bgCmdObj.substring(bgCmdStart, bgCmdEnd);
+                                }
+
+                                String bgSocket = "";
+                                int bgSockStart = bgCmdObj.indexOf("\"socket\": \"");
+                                if (bgSockStart >= 0) {
+                                    bgSockStart += 11;
+                                    int bgSockEnd = bgCmdObj.indexOf("\"", bgSockStart);
+                                    if (bgSockEnd >= 0) bgSocket = bgCmdObj.substring(bgSockStart, bgSockEnd);
+                                }
+
+                                int bgValue = 0;
+                                int bgValStart = bgCmdObj.indexOf("\"value\":");
+                                if (bgValStart >= 0) {
+                                    bgValStart += 8;
+                                    int bgValEnd = bgCmdObj.indexOf(",", bgValStart);
+                                    if (bgValEnd < 0) bgValEnd = bgCmdObj.length();
+                                    String bgValStr = bgCmdObj.substring(bgValStart, bgValEnd);
+                                    bgValStr.trim();
+                                    if (bgValStr != "null") bgValue = bgValStr.toInt();
+                                }
+
+                                outletManager.selectDevice(bgDev.getDeviceId());
+                                if (bgCmd == "relay_on") {
+                                    outletManager.relayOn(bgSocket == "a" ? SOCKET_A : SOCKET_B);
+                                    delay(100);
+                                } else if (bgCmd == "relay_off") {
+                                    outletManager.relayOff(bgSocket == "a" ? SOCKET_A : SOCKET_B);
+                                    delay(100);
+                                } else if (bgCmd == "set_threshold" && bgValue > 0) {
+                                    outletManager.setThreshold(bgValue);
+                                    delay(100);
+                                }
+
+                                bgStartIdx = bgEndIdx + 1;
+                            }
+                        }
+
+                        break;  // Only poll ONE background device per cycle
+                    }
+                }
 
                 // Connection monitoring
                 if (!anyFail) {

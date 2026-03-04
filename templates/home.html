@@ -1250,8 +1250,8 @@
 
                     <!-- Status Badges -->
                     <div class="status-badges">
-                        <span class="status-badge active">Active: {{ active_count }}</span>
-                        <span class="status-badge inactive">Inactive: {{ inactive_count }}</span>
+                        <span class="status-badge active" id="badgeActive">Active: {{ active_count }}</span>
+                        <span class="status-badge inactive" id="badgeInactive">Inactive: {{ inactive_count }}</span>
                     </div>
 
                     <!-- Registered CCUs -->
@@ -1648,12 +1648,30 @@
             const curB = document.getElementById(`cur-b-${deviceId}`);
             if (curA) curA.innerHTML = `0<span class="unit">mA</span>`;
             if (curB) curB.innerHTML = `0<span class="unit">mA</span>`;
+            // Note: subtitle is NOT reset — background polling keeps it updated
+        }
 
-            const card = document.getElementById(`outlet-${deviceId}`);
-            if (card) {
+        // ─── Update Active/Inactive Badges ───
+        function updateStatusBadges() {
+            let active = 0;
+            let inactive = 0;
+            document.querySelectorAll('.outlet-card').forEach(card => {
                 const subtitle = card.querySelector('.outlet-subtitle');
-                if (subtitle) subtitle.innerHTML = '0 mA · Inactive';
-            }
+                if (subtitle) {
+                    const text = subtitle.textContent.trim();
+                    // Check if the text starts with a number > 0
+                    const match = text.match(/^(\d+)\s*mA/);
+                    if (match && parseInt(match[1]) > 0) {
+                        active++;
+                    } else {
+                        inactive++;
+                    }
+                }
+            });
+            const badgeActive = document.getElementById('badgeActive');
+            const badgeInactive = document.getElementById('badgeInactive');
+            if (badgeActive) badgeActive.textContent = `Active: ${active}`;
+            if (badgeInactive) badgeInactive.textContent = `Inactive: ${inactive}`;
         }
 
         // ─── Toggle Relay ───
@@ -1785,47 +1803,51 @@
                             totalEl.innerHTML = `${payload.current_ma}<span class="total-load-unit">mA</span>`;
                         }
                     } else {
-                        // Update Outlet Data — only if this device is focused
-                        if (currentFocusedDevice !== payload.device_id) return;
-
-                        const curAEl = document.getElementById(`cur-a-${payload.device_id}`);
-                        const curBEl = document.getElementById(`cur-b-${payload.device_id}`);
-                        // Handle 0xFFFF overload sentinel (65535 = overload, not a real reading)
+                        // Update Outlet Data
+                        const cardEl = document.getElementById(`outlet-${payload.device_id}`);
                         const isOverloadA = payload.current_a === 65535;
                         const isOverloadB = payload.current_b === 65535;
+                        const realA = isOverloadA ? 0 : payload.current_a;
+                        const realB = isOverloadB ? 0 : payload.current_b;
+                        const totalMA = realA + realB;
 
-                        if (curAEl) curAEl.innerHTML = isOverloadA
-                            ? `<span style="color: var(--danger-red); font-weight: 700;">OVERLOAD</span>`
-                            : `${payload.current_a}<span class="unit">mA</span>`;
-                        if (curBEl) curBEl.innerHTML = isOverloadB
-                            ? `<span style="color: var(--danger-red); font-weight: 700;">OVERLOAD</span>`
-                            : `${payload.current_b}<span class="unit">mA</span>`;
-
-                        // Update Outlet subtitle/total amps (exclude overload sentinel from sum)
-                        const cardEl = document.getElementById(`outlet-${payload.device_id}`);
+                        // ALWAYS update subtitle + icon for ALL devices (collapsed or expanded)
                         if (cardEl) {
                             const subtitleEl = cardEl.querySelector('.outlet-subtitle');
                             const iconEl = cardEl.querySelector('.outlet-icon');
 
-                            const realA = isOverloadA ? 0 : payload.current_a;
-                            const realB = isOverloadB ? 0 : payload.current_b;
-                            const totalMA = realA + realB;
                             let statusText = 'Inactive';
                             if (payload.is_overload) {
                                 statusText = '<span style="color: var(--danger-red)">OVERLOAD</span>';
-                                iconEl.classList.add('overload');
+                                if (iconEl) iconEl.classList.add('overload');
                             } else {
-                                statusText = (payload.relay_a || payload.relay_b) ? 'Active' : 'Inactive';
-                                iconEl.classList.remove('overload');
+                                statusText = totalMA > 0 ? 'Active' : 'Inactive';
+                                if (iconEl) iconEl.classList.remove('overload');
                             }
 
                             if (subtitleEl) subtitleEl.innerHTML = `${totalMA} mA · ${statusText}`;
+                            updateStatusBadges();
+                        }
+
+                        // Detailed socket readings + toggles: ONLY for focused device
+                        if (currentFocusedDevice === payload.device_id) {
+                            const curAEl = document.getElementById(`cur-a-${payload.device_id}`);
+                            const curBEl = document.getElementById(`cur-b-${payload.device_id}`);
+
+                            if (curAEl) curAEl.innerHTML = isOverloadA
+                                ? `<span style="color: var(--danger-red); font-weight: 700;">OVERLOAD</span>`
+                                : `${payload.current_a}<span class="unit">mA</span>`;
+                            if (curBEl) curBEl.innerHTML = isOverloadB
+                                ? `<span style="color: var(--danger-red); font-weight: 700;">OVERLOAD</span>`
+                                : `${payload.current_b}<span class="unit">mA</span>`;
 
                             // Update toggle switch UI
-                            const toggleA = cardEl.querySelector('input[onchange*="\'a\'"]');
-                            const toggleB = cardEl.querySelector('input[onchange*="\'b\'"]');
-                            if (toggleA) toggleA.checked = payload.relay_a;
-                            if (toggleB) toggleB.checked = payload.relay_b;
+                            if (cardEl) {
+                                const toggleA = cardEl.querySelector('input[onchange*="\'a\'"]');
+                                const toggleB = cardEl.querySelector('input[onchange*="\'b\'"]');
+                                if (toggleA) toggleA.checked = payload.relay_a;
+                                if (toggleB) toggleB.checked = payload.relay_b;
+                            }
                         }
                     }
                 }
