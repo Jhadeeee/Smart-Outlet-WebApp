@@ -1,7 +1,7 @@
 # Smart-Outlet-WebApp — Developer Documentation
 
 **Framework:** Django 5.2 · **ASGI Server:** Daphne · **Database:** PostgreSQL  
-**Real-Time:** Django Channels (WebSockets) · **Version:** v1.3.0
+**Real-Time:** Django Channels (WebSockets) · **Version:** v7.0.0
 
 ---
 
@@ -9,14 +9,19 @@
 
 ### 1. Start the Local Server
 
-All commands run from the project root: `C:\Users\USER\Desktop\CONCEPT PAPER\Smart-Outlet-WebApp`
+All commands run from the project root: `C:\Users\USER\Documents\Smart-Outlet-WebApp`
 
 ```powershell
-# Start Daphne (ASGI — supports WebSockets for real-time updates)
-.\venv\Scripts\python.exe -m daphne -b 0.0.0.0 -p 8000 config.asgi:application
+# Step 1: Activate the virtual environment
+.\.venv\Scripts\Activate
+
+# Step 2: Start the development server (supports WebSockets via Daphne ASGI)
+.venv\Scripts\python.exe manage.py runserver 0.0.0.0:8000
 ```
 
 Then open **http://localhost:8000** in your browser.
+
+> **Note:** Using `0.0.0.0:8000` allows the ESP32 and other devices on the local network to reach the server. Django's `runserver` with Daphne handles both HTTP and WebSocket connections.
 
 ### 2. Find Your PC's IP Address
 
@@ -65,11 +70,11 @@ taskkill /F /PID (Get-NetTCPConnection -LocalPort 8000 -ErrorAction SilentlyCont
 
 | Command | Description |
 |:--------|:------------|
-| `.\venv\Scripts\python.exe -m daphne -b 0.0.0.0 -p 8000 config.asgi:application` | Start server (with WebSocket support) |
-| `.\venv\Scripts\python.exe manage.py runserver 0.0.0.0:8000` | Start server (basic, no WebSocket) |
-| `.\venv\Scripts\python.exe manage.py makemigrations outlets` | Generate migration files |
-| `.\venv\Scripts\python.exe manage.py migrate` | Apply migrations to database |
-| `.\venv\Scripts\python.exe manage.py createsuperuser` | Create admin user |
+| `.\.venv\Scripts\Activate` | Activate the Python virtual environment |
+| `.venv\Scripts\python.exe manage.py runserver 0.0.0.0:8000` | Start server (with WebSocket support via Daphne ASGI) |
+| `.venv\Scripts\python.exe manage.py makemigrations outlets` | Generate migration files |
+| `.venv\Scripts\python.exe manage.py migrate` | Apply migrations to database |
+| `.venv\Scripts\python.exe manage.py createsuperuser` | Create admin user |
 | `taskkill /F /PID (Get-NetTCPConnection -LocalPort 8000 -ErrorAction SilentlyContinue).OwningProcess` | Kill server on port 8000 |
 
 ---
@@ -141,7 +146,9 @@ taskkill /F /PID (Get-NetTCPConnection -LocalPort 8000 -ErrorAction SilentlyCont
 | `is_overload`| BooleanField | `False`  | True if `0xFFFF` overload trip     |
 | `timestamp`  | DateTime     | auto     | Reading timestamp                  |
 
-> **DB Write Throttle:** Sensor data is only persisted to the database every **5 minutes** (`DB_LOG_INTERVAL`). All data is broadcast via WebSocket immediately for real-time UI.
+> **DB Write Throttle:** Sensor data is only persisted to the database every **1 minute** (`DB_LOG_INTERVAL = 60s`). All data is broadcast via WebSocket immediately for real-time UI.
+
+> **Noise Floor Filter:** Outlet sensor readings between 1–100 mA are clamped to `0` server-side before logging or broadcasting. This eliminates PIC baseline noise (common defaults: 49 mA, 98 mA).
 
 ### MainBreakerReading
 
@@ -151,6 +158,8 @@ taskkill /F /PID (Get-NetTCPConnection -LocalPort 8000 -ErrorAction SilentlyCont
 | `ccu_device` | ForeignKey   | null     | Linked `CentralControlUnit`        |
 | `current_ma` | IntegerField | —        | Total load current in mA           |
 | `timestamp`  | DateTime     | auto     | Reading timestamp                  |
+
+> **Noise Floor Filter:** Main breaker readings between 1–250 mA are clamped to `0` server-side. This eliminates SCT-013 sensor noise when no actual load is present.
 
 ### PendingCommand
 
@@ -340,9 +349,30 @@ Alerts fire **immediately** (not subject to the 5-minute DB throttle):
 ### Real-Time UI Updates
 
 When a WebSocket message arrives:
-- **Sensor data:** Updates Socket A/B current values, relay toggle states, overload indicators
-- **Breaker data:** Updates the total load current display
+- **Sensor data:** Updates Socket A/B current values, relay toggle states, overload indicators, active/inactive badges, and breaker panel outlet list
+- **Breaker data:** Updates the total load current display with color-coded status (green/yellow/red)
 - The UI reflects state changes within ~1-2 seconds of the physical event
+
+### Breaker Monitor Panel
+
+The Total Load Current card is **expandable** — click to reveal:
+- **Color-coded status:** Green (normal), Yellow (near limit ≥80%), Red (overload ≥100%) based on threshold
+- **Active outlet list:** Shows each outlet's live current with individual **Cut** button
+- **Cut All Power** button to kill all relay outputs at once
+- **Threshold config** — set breaker limit in mA
+
+### Event History Page (`event_history.html`)
+
+Accessible from the profile dropdown → **Event History**. Displays the last 100 events from `EventLog`.
+
+| Feature | Description |
+|:--------|:------------|
+| **Filter buttons** | All, Overload, Threshold, Relay, Server |
+| **View modes** | Cards (default) or Table view |
+| **Color-coded icons** | Red (overload), Yellow (threshold), Green (relay), Purple (server) |
+| **Source badges** | Web / PIC / Server labels |
+| **Device badge** | Shows target device ID (e.g., `0xFE`) |
+| **Details** | Socket info, current readings, etc. |
 
 ---
 
@@ -376,6 +406,7 @@ Smart-Outlet-WebApp/
 │
 ├── templates/                   — HTML templates
 │   ├── home.html                — Main dashboard (outlets, controls, WebSocket)
+│   ├── event_history.html       — Event History (filterable, card/table views)
 │   ├── login.html               — Login page
 │   ├── register.html            — Registration page
 │   └── ...
@@ -395,7 +426,10 @@ Smart-Outlet-WebApp/
 
 | Setting              | Value                    | Notes                           |
 |:---------------------|:-------------------------|:--------------------------------|
-| `DB_LOG_INTERVAL`    | `5 minutes`              | Min interval between DB writes  |
+| `DB_LOG_INTERVAL`    | `60 seconds`             | Min interval between DB writes (sensor data) |
+| `BREAKER_LOG_INTERVAL` | `5 minutes`            | Min interval between DB writes (breaker data) |
+| `NOISE_FLOOR_MA`     | `100`                    | Outlet readings 1–100 mA → 0   |
+| `BREAKER_NOISE_FLOOR_MA` | `250`                | Breaker readings 1–250 mA → 0  |
 | `CLOUD_SEND_INTERVAL_MS` | `2000` (firmware)    | ESP32 polling interval          |
 | `HTTP_TIMEOUT_MS`    | `5000` (firmware)        | HTTP request timeout            |
 
@@ -423,5 +457,6 @@ Example: `http://10.31.253.107:8000`
 | **Direct fallback** | If ESP32 is unreachable for direct HTTP, Django silently falls back to `PendingCommand` queue (~2s delay). |
 | **Stale IP** | ESP32 IP is updated on every sensor push. If the IP changes, the next push auto-corrects it. |
 | **Current display** | Current values are displayed in milliamperes (mA) without rounding for higher precision. |
-| **Focus Device** | Only the expanded outlet receives sensor reads. Collapsed outlets show `0 mA` with disabled toggles. ESP32 polls `/api/focus/` every 2s. |
+| **Noise floor** | Outlet readings 1-100mA and breaker readings 1-250mA are clamped to 0 server-side to filter sensor noise. |
+| **Focus Device** | Only the expanded outlet receives sensor reads. Collapsed outlets show last known values with disabled toggles. ESP32 polls `/api/focus/` every 2s. |
 | **Last-write-wins** | If two users expand different outlets, the last expansion wins. All users see the same focused device. |

@@ -58,5 +58,6 @@
 // ─── Cloud / Server ─────────────────────────────────────────
 #define CLOUD_SEND_INTERVAL_MS  2000      // How often to send data to server
 #define HTTP_TIMEOUT_MS         5000      // HTTP request timeout
+#define BACKGROUND_POLL_INTERVAL_MS  30000  // Poll non-focused outlets every 30s
 
 #endif // CONFIG_H

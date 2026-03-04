@@ -119,6 +119,14 @@ def receive_sensor_data(request):
         if current_a == 65535 or current_b == 65535:
             is_overload = True
         
+        # Noise floor filter: PIC current sensors output ~49-98mA baseline
+        # noise even with no load. Clamp 0-100mA to 0 (skip overload sentinel).
+        NOISE_FLOOR_MA = 100
+        if 0 < current_a <= NOISE_FLOOR_MA:
+            current_a = 0
+        if 0 < current_b <= NOISE_FLOOR_MA:
+            current_b = 0
+        
         now = timezone.now()
         
         # NOTE: Relay state (relay_a/relay_b) from sensor data is NOT used here.
@@ -242,6 +250,12 @@ def receive_breaker_data(request):
         
         ccu_id = str(data['ccu_id']).upper().zfill(2)  # '1' → '01' to match registered format
         current_ma = int(data['current_ma'])
+        
+        # Noise floor filter: SCT-013 sensor outputs baseline noise with no load.
+        BREAKER_NOISE_FLOOR_MA = 250
+        if 0 < current_ma <= BREAKER_NOISE_FLOOR_MA:
+            current_ma = 0
+        
         now = timezone.now()
         
         # Look up registered CCU (if exists) and capture IP

@@ -1,7 +1,8 @@
 # Central Control Unit (CCU) Firmware — Developer Documentation
 
 **MCU:** ESP32 · **Framework:** Arduino · **IDE:** Arduino IDE / PlatformIO  
-**Firmware:** v4.3.0 · **Communication:** HC-12 433MHz RF + WiFi
+**Firmware:** v5.0.0 · **Communication:** HC-12 433MHz RF + WiFi  
+**Partition Scheme:** Huge APP (3MB No OTA / 1MB SPIFFS) — ~38% flash usage
 
 ---
 
@@ -439,6 +440,17 @@ When in RUNNING mode, the CCU periodically sends data to the configured server:
 | `SERIAL_BAUD`           | `115200` | USB serial monitor       |
 | `CLOUD_SEND_INTERVAL_MS`| `2000`  | 2s between cloud pushes  |
 | `HTTP_TIMEOUT_MS`       | `5000`  | HTTP request timeout     |
+| `BACKGROUND_POLL_INTERVAL_MS` | `30000` | 30s background sensor poll |
+
+### Partition Scheme
+
+| Setting | Value |
+|:--------|:------|
+| Partition | Huge APP (3MB No OTA / 1MB SPIFFS) |
+| Flash Usage | ~38% (down from 91% with default partition) |
+| OTA Updates | Not available (trade-off for more app space) |
+
+> **Note:** The partition scheme was changed from the default (with OTA) to "Huge APP" to reduce flash usage from 91% to ~38%. This sacrifices over-the-air updates for significantly more application space.
 
 ---
 
