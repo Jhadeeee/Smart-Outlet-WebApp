@@ -252,7 +252,7 @@ def receive_breaker_data(request):
         current_ma = max(0, int(data['current_ma']))
         
         # Noise floor filter: SCT-013 sensor outputs baseline noise with no load.
-        BREAKER_NOISE_FLOOR_MA = 250
+        BREAKER_NOISE_FLOOR_MA = 280
         if 0 < current_ma <= BREAKER_NOISE_FLOOR_MA:
             current_ma = 0
         
