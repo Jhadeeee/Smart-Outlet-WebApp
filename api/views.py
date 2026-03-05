@@ -270,6 +270,7 @@ def receive_breaker_data(request):
                 ccu_id=ccu_id,
                 ccu_device=ccu_obj,
                 current_ma=current_ma,
+                threshold=ccu_obj.breaker_threshold if ccu_obj else 0,
             )
             saved_to_db = True
         
@@ -552,6 +553,42 @@ def log_event(request):
             details=details,
         )
         return JsonResponse({'success': True, 'message': 'Event logged'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': str(e)}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def set_breaker_threshold(request):
+    """
+    API endpoint to save the main breaker threshold.
+    URL: POST /api/breaker-threshold/
+    Updates the threshold on the latest MainBreakerReading for the user's CCU.
+    """
+    if not request.user.is_authenticated:
+        return JsonResponse({'success': False, 'message': 'Authentication required'}, status=401)
+
+    try:
+        data = json.loads(request.body)
+        threshold = int(data.get('threshold', 0))
+
+        if threshold <= 0:
+            return JsonResponse({'success': False, 'message': 'Threshold must be greater than 0'}, status=400)
+
+        # Get user's CCU and update its threshold
+        ccu = CentralControlUnit.objects.filter(user=request.user).first()
+
+        if not ccu:
+            return JsonResponse({'success': False, 'message': 'No CCU registered'}, status=404)
+
+        ccu.breaker_threshold = threshold
+        ccu.save(update_fields=['breaker_threshold'])
+
+        return JsonResponse({
+            'success': True,
+            'message': f'Breaker threshold set to {threshold} mA',
+            'threshold': threshold,
+        })
     except Exception as e:
         return JsonResponse({'success': False, 'message': str(e)}, status=500)
 
