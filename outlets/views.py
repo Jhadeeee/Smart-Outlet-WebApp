@@ -115,11 +115,16 @@ def home_view(request):
     
     # Get total load from SCT-013 sensor (main breaker) — filtered by user's CCUs
     total_current = 0
+    breaker_threshold = 15000
     first_ccu_id = ''
     if user_ccu_ids:
         latest_breaker = MainBreakerReading.objects.filter(ccu_id__in=user_ccu_ids).first()
         total_current = latest_breaker.current_ma if latest_breaker else 0
         first_ccu_id = user_ccu_ids[0]
+        # Load threshold from CCU config (not from individual readings)
+        first_ccu = user_ccus.first()
+        if first_ccu and first_ccu.breaker_threshold > 0:
+            breaker_threshold = first_ccu.breaker_threshold
     
     active_count = sum(1 for o in outlets if o.relay_a or o.relay_b)
     inactive_count = len(outlet_data) - active_count
@@ -128,6 +133,7 @@ def home_view(request):
         'user': request.user,
         'outlet_data': outlet_data,
         'total_current_ma': total_current,
+        'breaker_threshold': breaker_threshold,
         'user_ccus': user_ccus,
         'ccu_id': first_ccu_id,
         'active_count': active_count,
