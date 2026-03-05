@@ -15,6 +15,9 @@
     <!-- Font Awesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
         rel="stylesheet">
@@ -308,7 +311,7 @@
         }
 
         .total-load-card.expanded .breaker-body {
-            max-height: 600px;
+            max-height: 900px;
             padding: 16px 24px 20px;
             border-top: 1px solid rgba(255, 255, 255, 0.15);
         }
@@ -320,6 +323,15 @@
             letter-spacing: 1px;
             opacity: 0.6;
             margin-bottom: 10px;
+        }
+
+        .chart-container {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 12px;
+            padding: 12px 10px;
+            margin-bottom: 16px;
+            height: 180px;
+            position: relative;
         }
 
         .breaker-outlet-row {
@@ -1429,6 +1441,12 @@
                         </div>
 
                         <div class="breaker-body">
+                            <!-- Live Load Chart -->
+                            <div class="breaker-section-label">Load History</div>
+                            <div class="chart-container">
+                                <canvas id="breakerChart"></canvas>
+                            </div>
+
                             <!-- Active Outlet List -->
                             <div class="breaker-section-label">Outlet Monitor</div>
                             <div id="breakerOutletList">
@@ -1765,6 +1783,96 @@
             }, 3000);
         }
 
+        // ─── Live Breaker Chart ───
+        const MAX_CHART_POINTS = 60;
+        let breakerChart = null;
+
+        function initBreakerChart() {
+            const ctx = document.getElementById('breakerChart');
+            if (!ctx) return;
+            const gradient = ctx.getContext('2d').createLinearGradient(0, 0, 0, 160);
+            gradient.addColorStop(0, 'rgba(102, 126, 234, 0.4)');
+            gradient.addColorStop(1, 'rgba(102, 126, 234, 0.02)');
+
+            breakerChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Load (mA)',
+                        data: [],
+                        borderColor: '#667eea',
+                        borderWidth: 2,
+                        backgroundColor: gradient,
+                        fill: true,
+                        tension: 0.35,
+                        pointRadius: 0,
+                        pointHoverRadius: 4,
+                        pointHoverBackgroundColor: '#a78bfa',
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: { duration: 300 },
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: 'rgba(15, 12, 41, 0.9)',
+                            titleColor: 'rgba(255,255,255,0.7)',
+                            bodyColor: '#fff',
+                            borderColor: 'rgba(255,255,255,0.1)',
+                            borderWidth: 1,
+                            cornerRadius: 8,
+                            padding: 10,
+                            callbacks: {
+                                label: (ctx) => `${ctx.parsed.y} mA`
+                            }
+                        },
+                    },
+                    scales: {
+                        x: {
+                            ticks: { color: 'rgba(255,255,255,0.35)', font: { size: 9 }, maxTicksLimit: 8 },
+                            grid: { color: 'rgba(255,255,255,0.04)' },
+                            border: { display: false },
+                        },
+                        y: {
+                            beginAtZero: true,
+                            ticks: { color: 'rgba(255,255,255,0.35)', font: { size: 10 }, callback: v => v + ' mA' },
+                            grid: { color: 'rgba(255,255,255,0.06)' },
+                            border: { display: false },
+                        },
+                    },
+                }
+            });
+        }
+
+        function pushChartData(currentMa) {
+            if (!breakerChart) initBreakerChart();
+            if (!breakerChart) return;
+
+            const now = new Date();
+            const label = now.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+            breakerChart.data.labels.push(label);
+            breakerChart.data.datasets[0].data.push(currentMa);
+
+            // Rolling window
+            if (breakerChart.data.labels.length > MAX_CHART_POINTS) {
+                breakerChart.data.labels.shift();
+                breakerChart.data.datasets[0].data.shift();
+            }
+
+            breakerChart.update('none');  // 'none' = skip animation for smooth scrolling
+        }
+
+        // Initialize chart on page load
+        initBreakerChart();
+
         // ─── Set General Command ───
         async function sendCommand(deviceId, command, socket = '', value = null) {
             try {
@@ -2100,6 +2208,7 @@
                         if (totalEl && payload.current_ma !== undefined) {
                             totalEl.innerHTML = `${payload.current_ma}<span class="total-load-unit">mA</span>`;
                             updateBreakerColor(payload.current_ma);
+                            pushChartData(payload.current_ma);
                         }
                     } else {
                         // Update Outlet Data
