@@ -1468,7 +1468,7 @@
                             <!-- Threshold Setting -->
                             <div class="breaker-threshold-row">
                                 <label>Breaker Limit:</label>
-                                <input type="text" id="mainThresholdInput" value="15000">
+                                <input type="text" id="mainThresholdInput" value="{{ breaker_threshold }}">
                                 <label>mA</label>
                                 <button class="btn-sm" onclick="setMainThreshold()">Set</button>
                             </div>
@@ -2072,7 +2072,7 @@
 
         // ─── Breaker Panel Toggle ───
         let breakerExpanded = false;
-        let breakerThreshold = 15000;  // Default threshold in mA
+        let breakerThreshold = {{ breaker_threshold }};  // Loaded from database
 
         function toggleBreakerPanel() {
             const card = document.getElementById('breakerCard');
@@ -2132,12 +2132,29 @@
         }
 
         // ─── Main Breaker Threshold ───
-        function setMainThreshold() {
+        async function setMainThreshold() {
             const input = document.getElementById('mainThresholdInput');
             const val = parseInt(input.value);
             if (val > 0) {
-                breakerThreshold = val;
-                showToast(`Breaker threshold set: ${val}mA`, 'success');
+                try {
+                    const response = await fetch('/api/breaker-threshold/', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': getCookie('csrftoken'),
+                        },
+                        body: JSON.stringify({ threshold: val }),
+                    });
+                    const data = await response.json();
+                    if (data.success) {
+                        breakerThreshold = val;
+                        showToast(`Breaker threshold set: ${val} mA`, 'success');
+                    } else {
+                        showToast(data.message || 'Failed to set threshold', 'error');
+                    }
+                } catch (err) {
+                    showToast('Network error setting threshold', 'error');
+                }
             }
         }
 

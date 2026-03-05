@@ -16,4 +16,6 @@ urlpatterns = [
     path('focus/<str:device_id>/', views.set_focus_device, name='set_focus_device'),
     # Google Sheets export
     path('export/sheets/', views.export_for_sheets, name='export_for_sheets'),
+    # Breaker threshold
+    path('breaker-threshold/', views.set_breaker_threshold, name='set_breaker_threshold'),
 ]
