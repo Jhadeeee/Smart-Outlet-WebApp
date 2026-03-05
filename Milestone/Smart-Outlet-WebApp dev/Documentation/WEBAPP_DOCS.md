@@ -159,7 +159,7 @@ Get-NetTCPConnection -LocalPort 8000 -ErrorAction SilentlyContinue | ForEach-Obj
 | `current_ma` | IntegerField | —        | Total load current in mA           |
 | `timestamp`  | DateTime     | auto     | Reading timestamp                  |
 
-> **Noise Floor Filter:** Main breaker readings between 1–250 mA are clamped to `0` server-side. This eliminates SCT-013 sensor noise when no actual load is present.
+> **Noise Floor Filter:** Main breaker readings between 1–280 mA are clamped to `0` server-side. This eliminates SCT-013 sensor noise when no actual load is present.
 
 ### PendingCommand
 
@@ -350,7 +350,7 @@ Alerts fire **immediately** (not subject to the 5-minute DB throttle):
 
 When a WebSocket message arrives:
 - **Sensor data:** Updates Socket A/B current values, relay toggle states, overload indicators, active/inactive badges, and breaker panel outlet list
-- **Breaker data:** Updates the total load current display with color-coded status (green/yellow/red)
+- **Breaker data:** Updates the total load current display with color-coded status (green/yellow/red) and appends to the live line chart
 - The UI reflects state changes within ~1-2 seconds of the physical event
 
 ### Breaker Monitor Panel
@@ -360,6 +360,8 @@ The Total Load Current card is **expandable** — click to reveal:
 - **Active outlet list:** Shows each outlet's live current with individual **Cut** button
 - **Cut All Power** button to kill all relay outputs at once
 - **Threshold config** — set breaker limit in mA
+- **Live line chart** — real-time total load current graph (Chart.js), updates on each WebSocket push
+- **Card state caching** — outlet cards remember their last known readings and toggle states when collapsed, instantly restoring them on re-expand
 
 ### Event History Page (`event_history.html`)
 
@@ -429,7 +431,7 @@ Smart-Outlet-WebApp/
 | `DB_LOG_INTERVAL`    | `60 seconds`             | Min interval between DB writes (sensor data) |
 | `BREAKER_LOG_INTERVAL` | `5 minutes`            | Min interval between DB writes (breaker data) |
 | `NOISE_FLOOR_MA`     | `100`                    | Outlet readings 1–100 mA → 0   |
-| `BREAKER_NOISE_FLOOR_MA` | `250`                | Breaker readings 1–250 mA → 0  |
+| `BREAKER_NOISE_FLOOR_MA` | `280`                | Breaker readings 1–280 mA → 0  |
 | `CLOUD_SEND_INTERVAL_MS` | `2000` (firmware)    | ESP32 polling interval          |
 | `HTTP_TIMEOUT_MS`    | `5000` (firmware)        | HTTP request timeout            |
 
@@ -457,6 +459,6 @@ Example: `http://10.31.253.107:8000`
 | **Direct fallback** | If ESP32 is unreachable for direct HTTP, Django silently falls back to `PendingCommand` queue (~2s delay). |
 | **Stale IP** | ESP32 IP is updated on every sensor push. If the IP changes, the next push auto-corrects it. |
 | **Current display** | Current values are displayed in milliamperes (mA) without rounding for higher precision. |
-| **Noise floor** | Outlet readings 1-100mA and breaker readings 1-250mA are clamped to 0 server-side to filter sensor noise. |
+| **Noise floor** | Outlet readings 1-100mA and breaker readings 1-280mA are clamped to 0 server-side to filter sensor noise. |
 | **Focus Device** | Only the expanded outlet receives sensor reads. Collapsed outlets show last known values with disabled toggles. ESP32 polls `/api/focus/` every 2s. |
 | **Last-write-wins** | If two users expand different outlets, the last expansion wins. All users see the same focused device. |

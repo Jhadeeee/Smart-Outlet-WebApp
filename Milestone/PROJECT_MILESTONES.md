@@ -49,6 +49,7 @@
 
 | Date       | Version | Milestone                                                                 |
 |:-----------|:--------|:--------------------------------------------------------------------------|
+| 2026-03-05 | v8.1.0  | Live breaker line chart (Chart.js), outlet card state caching, toggle visual persistence, breaker noise floor 250→280 mA |
 | 2026-03-05 | v8.0.0  | Version sync with system-wide v8.0.0 bump, documentation updates         |
 | 2026-03-04 | v7.0.0  | Expandable breaker monitor with color indicators, noise floor filters (0-100mA outlet, 0-250mA breaker), real-time badge updates, Event History page with filters + card/table views |
 | 2026-03-03 | v1.3.0  | Focus Device — expand/collapse outlets, disabled controls when collapsed  |
@@ -66,7 +67,7 @@
 - [x] Direct ESP32 communication — relay commands via HTTP (bypasses polling queue)
 - [x] Focus Device — only read/control the expanded outlet (mirrors local dashboard)
 - [x] Expandable breaker monitor — color-coded load card, per-outlet cut buttons
-- [x] Noise floor filters — clamp sensor noise to 0 (PIC: 0-100mA, SCT013: 0-250mA)
+- [x] Noise floor filters — clamp sensor noise to 0 (PIC: 0-100mA, SCT013: 0-280mA)
 - [x] Event History page — filterable event log with card/table views
 - [x] Real-time status badges — Active/Inactive counts update live via WebSocket
 - [ ] Auto cut-off — automatically kill all outlets when breaker threshold exceeded
