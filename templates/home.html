@@ -1794,6 +1794,7 @@
 
         // ─── Focus Device (Expand/Collapse) ───
         let currentFocusedDevice = null;
+        const deviceCache = {};  // Cache last known state per device
 
         async function focusDevice(deviceId) {
             const card = document.getElementById(`outlet-${deviceId}`);
@@ -1832,6 +1833,9 @@
             enableToggles(card);
             currentFocusedDevice = deviceId;
 
+            // Instantly restore cached state (no waiting for WebSocket)
+            restoreDeviceState(deviceId);
+
             // Set focus on server
             fetch(`/api/focus/${deviceId}/`, {
                 method: 'POST',
@@ -1842,7 +1846,7 @@
         function disableToggles(card) {
             card.querySelectorAll('.toggle-switch input[type="checkbox"]').forEach(toggle => {
                 toggle.disabled = true;
-                toggle.checked = false;
+                // Don't uncheck — preserve last known state visually
             });
         }
 
@@ -1853,11 +1857,35 @@
         }
 
         function resetCurrentDisplay(deviceId) {
+            // Don't zero out — keep last known values visible even when collapsed
+            // The subtitle already stays updated via background WebSocket
+        }
+
+        function restoreDeviceState(deviceId) {
+            const cached = deviceCache[deviceId];
+            if (!cached) return;
+
+            // Restore current readings
             const curA = document.getElementById(`cur-a-${deviceId}`);
             const curB = document.getElementById(`cur-b-${deviceId}`);
-            if (curA) curA.innerHTML = `0<span class="unit">mA</span>`;
-            if (curB) curB.innerHTML = `0<span class="unit">mA</span>`;
-            // Note: subtitle is NOT reset — background polling keeps it updated
+            const isOverloadA = cached.current_a === 65535;
+            const isOverloadB = cached.current_b === 65535;
+
+            if (curA) curA.innerHTML = isOverloadA
+                ? `<span style="color: var(--danger-red); font-weight: 700;">OVERLOAD</span>`
+                : `${cached.current_a}<span class="unit">mA</span>`;
+            if (curB) curB.innerHTML = isOverloadB
+                ? `<span style="color: var(--danger-red); font-weight: 700;">OVERLOAD</span>`
+                : `${cached.current_b}<span class="unit">mA</span>`;
+
+            // Restore toggle switch states
+            const cardEl = document.getElementById(`outlet-${deviceId}`);
+            if (cardEl) {
+                const toggleA = cardEl.querySelector('input[onchange*="\'a\'"]');
+                const toggleB = cardEl.querySelector('input[onchange*="\'b\'"]');
+                if (toggleA) toggleA.checked = cached.relay_a;
+                if (toggleB) toggleB.checked = cached.relay_b;
+            }
         }
 
         // ─── Update Active/Inactive Badges ───
@@ -2121,6 +2149,15 @@
                                 if (toggleB) toggleB.checked = payload.relay_b;
                             }
                         }
+
+                        // Always cache the latest state for instant restore on re-expand
+                        deviceCache[payload.device_id] = {
+                            current_a: payload.current_a,
+                            current_b: payload.current_b,
+                            relay_a: payload.relay_a,
+                            relay_b: payload.relay_b,
+                            is_overload: payload.is_overload,
+                        };
                     }
                 }
             };
