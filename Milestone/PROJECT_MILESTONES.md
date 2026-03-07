@@ -82,10 +82,10 @@
 
 | Priority | Feature | Complexity | Risk | Status |
 |:--------:|:--------|:----------:|:----:|:------:|
-| 1 | Smart Outlet LED Activation | Low | Low | [ ] |
+| 1 | Smart Outlet LED Activation | Low | Low | [x] |
 | 2 | AI Chatbot Integration | Medium | Low | [ ] |
 | 3 | Notifications UI | Medium | Low | [ ] |
-| 4 | Host to Render (Cloud Deployment) | Medium | Medium | [ ] |
+| 4 | Host to Render (Cloud Deployment) | Medium | Medium | [x] |
 | 5 | Temporary ESP Data Local Storage | High | Medium | [ ] |
 | 6 | Auto Cut-Off on Near-Threshold | High | **High** | [ ] |
 

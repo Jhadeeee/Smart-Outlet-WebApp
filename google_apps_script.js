@@ -19,7 +19,7 @@
 // ║  CONFIGURATION — UPDATE THESE VALUES                    ║
 // ╚══════════════════════════════════════════════════════════╝
 
-const SERVER_URL = "https://decurrently-schismless-dot.ngrok-free.dev";  // ngrok tunnel to localhost:8000
+const SERVER_URL = "https://smart-outlet-webapp.onrender.com";  // Render deployment
 const API_KEY = "smartoutlet-sheets-export-2026";             // Matches SHEETS_API_KEY in .env
 const DAYS = 30;                              // How many days of data to fetch
 
@@ -63,8 +63,7 @@ function fetchAllData() {
         response = UrlFetchApp.fetch(url, {
             muteHttpExceptions: true,
             headers: {
-                "Accept": "application/json",
-                "ngrok-skip-browser-warning": "true"
+                "Accept": "application/json"
             }
         });
     } catch (e) {
