@@ -1,6 +1,6 @@
 # 🔌 Smart Outlet System — Project Milestones
 
-**Last Updated:** March 5, 2026 (v8.1.0 — Live Breaker Chart, Card Caching, OTA Planning)
+**Last Updated:** March 7, 2026 (v9.0.0 — Development Roadmap Update)
 
 ---
 
@@ -61,7 +61,7 @@
 
 ---
 
-## Roadmap
+## Completed Milestones
 
 - [x] Outlet Breaker — SCT013-100A main load monitoring via ESP32
 - [x] WebApp full cloud integration — ESP32 ↔ Django server data sync
@@ -71,10 +71,45 @@
 - [x] Noise floor filters — clamp sensor noise to 0 (PIC: 0-100mA, SCT013: 0-280mA)
 - [x] Event History page — filterable event log with card/table views
 - [x] Real-time status badges — Active/Inactive counts update live via WebSocket
-- [ ] Auto cut-off — automatically kill all outlets when breaker threshold exceeded
 - [x] Online Dashboard — CRUD for outlets, threshold config, AI chat panel
-- [ ] Persistent device storage on ESP32 (SPIFFS/NVS instead of RAM)
-- [ ] OTA firmware updates for ESP32 (currently sacrificed for flash space via Huge APP partition)
+- [x] Live breaker line chart (Chart.js) + card state caching
+- [x] Breaker threshold persistence — saved to CCU model, stamps each reading for spreadsheet
+- [x] Google Sheets integration — auto-export sensor data
+
+---
+
+## Development Roadmap v9.0.0
+
+| Priority | Feature | Complexity | Risk | Status |
+|:--------:|:--------|:----------:|:----:|:------:|
+| 1 | Smart Outlet LED Activation | Low | Low | [ ] |
+| 2 | AI Chatbot Integration | Medium | Low | [ ] |
+| 3 | Notifications UI | Medium | Low | [ ] |
+| 4 | Host to Render (Cloud Deployment) | Medium | Medium | [ ] |
+| 5 | Temporary ESP Data Local Storage | High | Medium | [ ] |
+| 6 | Auto Cut-Off on Near-Threshold | High | **High** | [ ] |
+
+### Priority 1: Smart Outlet LED Activation
+The smart outlet has a built-in LED indicator that turns HIGH when the master ID, device ID, and threshold are configured out of their defaults. Since the CCU currently uses ID `001` — the default known master ID — the LED remains LOW. Fix by configuring the CCU ID to a non-default value or updating the firmware logic.
+
+### Priority 2: AI Chatbot Integration (Gemini Function Calling)
+Integrate the existing chatbot UI with Google Gemini using **function calling** so users can control outlets, query socket readings, and get analytics through natural language — supports English, Filipino, and Bisaya.
+
+### Priority 3: Notifications UI
+Build the notification bell icon on the homepage. Users receive real-time notifications from AI analytics, system events (overload, auto-cutoff), and threshold warnings. Requires a `Notification` model and WebSocket push delivery.
+
+### Priority 4: Host to Render (Cloud Deployment)
+Deploy the Django + Daphne ASGI app to Render. Requires migration from SQLite to **PostgreSQL**, **Redis** for Channels layer, `whitenoise` for static files, and updating the ESP32 firmware to send data to the public Render URL instead of LAN IP.
+
+### Priority 5: Temporary ESP Data Local Storage
+Remove the AP mode fallback on WiFi disconnect. Instead, auto-reconnect to saved credentials and temporarily buffer sensor data in ESP32 local storage (SPIFFS/LittleFS) during offline periods. Auto-sync buffered data to the cloud database on reconnection, then purge local copies.
+
+> ⚠️ **Caution:** "Huge APP" partition scheme leaves limited SPIFFS space (~128-256KB). Use compact binary format and RAM buffering before flash writes to reduce wear.
+
+### Priority 6: Auto Cut-Off on Near-Threshold (Safety Critical)
+Both online and offline, the ESP32 must auto-cut the socket drawing the highest current when the breaker reading approaches the declared threshold. Must log the event and notify the user. Requires per-socket current knowledge, filtered readings to avoid false positives, configurable trigger percentage, and a cooldown period before re-enabling.
+
+> ⚠️ **Caution:** This is the highest-risk feature. Auto-cutting appliances (computers, refrigerators) could cause damage. Consider a "protected socket" flag that is exempt from auto-cutoff.
 
 ---
 

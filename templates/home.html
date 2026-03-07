@@ -1515,18 +1515,6 @@
                                 </button>
                             </form>
                         </div>
-                        <!-- Master ID Control -->
-                        <div class="limit-bar outlet-limit"
-                            style="margin:0; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:rgba(255,255,255,0.8)">
-                            <div class="input-group-custom">
-                                <label style="color:rgba(255,255,255,0.7)">Global Master ID:</label>
-                                <span style="color:var(--accent-purple);font-weight:600">0x</span>
-                                <input type="text" id="masterId-{{ ccu.ccu_id }}" value="{{ ccu.ccu_id }}" maxlength="2"
-                                    style="width:50px; background:rgba(255,255,255,0.1); color:white">
-                            </div>
-                            <button class="btn-save" style="background:rgba(255,255,255,0.1); color:white"
-                                onclick="setMasterId('{{ ccu.ccu_id }}')">Set (Hold PIC 3s)</button>
-                        </div>
                     </div>
                     {% endfor %}
                     {% else %}
@@ -2168,14 +2156,7 @@
         }
 
         // ─── Set Master ID ───
-        function setMasterId(ccuId) {
-            const input = document.getElementById(`masterId-${ccuId}`);
-            const val = input.value;
-            if (val && val.length > 0) {
-                showToast(`Master ID saved to DB. Hold PIC button for 3s to sync.`, 'success');
-                // NOTE: Requires backend implementation to broadcast master ID change
-            }
-        }
+
 
         // ─── Change Device ID prompt ───
         function promptChangeDeviceId(oldId) {

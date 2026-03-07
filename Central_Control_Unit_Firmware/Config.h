@@ -41,7 +41,7 @@
 #define RF_SOF           0xAA             // Start of Frame byte
 #define RF_EOF           0xBB             // End of Frame byte
 #define RF_PACKET_SIZE   8                // Fixed 8-byte packet size
-#define CCU_SENDER_ID    0x01             // Must match PIC's DEFAULT_ID_MASTER
+#define CCU_SENDER_ID    0x02             // Non-default master ID — triggers LED on smart outlets
 #define MAX_OUTLETS      8                // Maximum number of smart outlets
 
 // ─── Breaker Monitor (SCT013) ───────────────────────────────
